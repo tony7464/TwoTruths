@@ -249,6 +249,20 @@ def update_statement(statement_id):
     return owner_statement_schema.dump(statement)
 
 
+@app.delete("/api/statements")
+def delete_statements():
+    user, err = require_login()
+    if err:
+        return err
+    if user_has_guesses(user.id):
+        return error("Your statements are locked because someone has guessed.", 403)
+
+    for statement in list(user.statements):
+        db.session.delete(statement)
+    db.session.commit()
+    return {"message": "Statements deleted."}
+
+
 @app.delete("/api/statements/<int:statement_id>")
 def delete_statement(statement_id):
     user, err = require_login()
@@ -261,9 +275,10 @@ def delete_statement(statement_id):
     if user_has_guesses(user.id):
         return error("Your statements are locked because someone has guessed.", 403)
 
-    db.session.delete(statement)
-    db.session.commit()
-    return {"message": "Statement deleted."}
+    return error(
+        "Delete your whole set and write a new one; a profile needs exactly 3 statements.",
+        400,
+    )
 
 
 # --- guesses ---

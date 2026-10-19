@@ -158,6 +158,35 @@ def test_only_the_owner_can_edit_or_delete(client, other):
     assert len(still_there) == 3
 
 
+def test_delete_the_whole_set_then_write_a_new_one(client):
+    sign_up(client, "casey")
+    add_statements(client)
+
+    removed = client.delete("/api/statements")
+    assert removed.status_code == 200
+    assert removed.get_json()["message"] == "Statements deleted."
+    assert client.get("/api/statements").get_json() == []
+
+    created = add_statements(client)
+    assert len(created) == 3
+
+
+def test_cannot_delete_the_whole_set_after_a_guess(client, other):
+    owner = sign_up(client, "alex")
+    created = add_statements(client)
+    sign_up(other, "jordan")
+
+    guess = other.post("/api/guesses", json={
+        "profile_user_id": owner["id"],
+        "statement_id": truth_id(created),
+    })
+    assert guess.status_code == 201
+
+    removed = client.delete("/api/statements")
+    assert removed.status_code == 403
+    assert len(client.get("/api/statements").get_json()) == 3
+
+
 def test_statements_lock_after_a_guess(client, other):
     owner = sign_up(client, "alex")
     created = add_statements(client)
