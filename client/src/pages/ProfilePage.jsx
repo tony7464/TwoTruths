@@ -1,0 +1,172 @@
+import { useEffect, useState } from "react";
+import { api } from "../api";
+import { useAuth } from "../AuthContext";
+import ErrorNote from "../components/ErrorNote";
+
+const EMPTY = ["", "", ""];
+
+function draftsFrom(statements) {
+  if (statements.length === 3) {
+    return statements.map((statement) => statement.content);
+  }
+  return EMPTY;
+}
+
+export default function ProfilePage() {
+  const { user, refreshUser } = useAuth();
+  const existing = user.statements || [];
+  const locked = user.statements_locked;
+  const canEdit = !locked && (existing.length === 0 || existing.length === 3);
+  const [drafts, setDrafts] = useState(() => draftsFrom(existing));
+  const [lieIndex, setLieIndex] = useState(() => {
+    const index = existing.findIndex((statement) => statement.is_lie);
+    return index === -1 ? 0 : index;
+  });
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (existing.length === 3) {
+      setDrafts(existing.map((statement) => statement.content));
+      const index = existing.findIndex((statement) => statement.is_lie);
+      setLieIndex(index === -1 ? 0 : index);
+    }
+  }, [user]);
+
+  function updateDraft(index, value) {
+    setDrafts((current) => current.map((text, i) => (i === index ? value : text)));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    setSaving(true);
+
+    try {
+      if (existing.length === 0) {
+        await api("/api/statements", {
+          method: "POST",
+          body: JSON.stringify({
+            statements: drafts.map((content, index) => ({
+              content,
+              is_lie: index === lieIndex,
+            })),
+          }),
+        });
+      } else {
+        // Mark the new lie first so the profile never has zero lies.
+        await api(`/api/statements/${existing[lieIndex].id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ content: drafts[lieIndex], is_lie: true }),
+        });
+        for (let index = 0; index < existing.length; index += 1) {
+          if (index === lieIndex) continue;
+          await api(`/api/statements/${existing[index].id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ content: drafts[index], is_lie: false }),
+          });
+        }
+      }
+      await refreshUser();
+      setNotice("Profile saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearProfile() {
+    setError("");
+    setNotice("");
+    setSaving(true);
+    try {
+      for (const statement of existing) {
+        await api(`/api/statements/${statement.id}`, { method: "DELETE" });
+      }
+      setDrafts(EMPTY);
+      setLieIndex(0);
+      await refreshUser();
+      setNotice("Statements deleted. Write a new set of three.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Your two truths and a lie</h1>
+        <p className="mt-1 text-sm text-stone-600">
+          Other people only see the sentences. They have one guess to find the lie.
+        </p>
+      </div>
+
+      {locked && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Someone has guessed, so these statements are locked.
+        </p>
+      )}
+      {existing.length > 0 && existing.length !== 3 && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          A profile needs exactly 3 statements. Delete the rest and start over.
+        </p>
+      )}
+
+      <ErrorNote message={error} />
+      {notice && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</p>}
+
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm">
+        {drafts.map((text, index) => (
+          <fieldset key={index} className="space-y-2">
+            <label className="block text-sm font-medium">
+              Statement {index + 1}
+              <textarea
+                className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-normal"
+                rows="2"
+                value={text}
+                disabled={!canEdit}
+                onChange={(event) => updateDraft(index, event.target.value)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-stone-700">
+              <input
+                type="radio"
+                name="lie"
+                checked={lieIndex === index}
+                disabled={!canEdit}
+                onChange={() => setLieIndex(index)}
+              />
+              This one is the lie
+            </label>
+          </fieldset>
+        ))}
+
+        {canEdit && (
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-md bg-emerald-700 px-4 py-2 text-white hover:bg-emerald-800 disabled:opacity-60"
+          >
+            {existing.length === 3 ? "Save changes" : "Save profile"}
+          </button>
+        )}
+      </form>
+
+      {!locked && existing.length > 0 && (
+        <button
+          type="button"
+          onClick={clearProfile}
+          disabled={saving}
+          className="text-sm text-rose-700 underline"
+        >
+          Delete statements and start over
+        </button>
+      )}
+    </section>
+  );
+}
