@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { useAuth } from "../AuthContext";
+import { useAuth } from "../useAuth";
 import ErrorNote from "../components/ErrorNote";
 
 export default function InboxPage() {

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../api";
-import { useAuth } from "../AuthContext";
+import { useAuth } from "../useAuth";
 import ErrorNote from "../components/ErrorNote";
 
 const EMPTY = ["", "", ""];
@@ -12,27 +12,26 @@ function draftsFrom(statements) {
   return EMPTY;
 }
 
+function lieIndexFrom(statements) {
+  const index = statements.findIndex((statement) => statement.is_lie);
+  return index === -1 ? 0 : index;
+}
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const existing = user.statements || [];
   const locked = user.statements_locked;
   const canEdit = !locked && (existing.length === 0 || existing.length === 3);
   const [drafts, setDrafts] = useState(() => draftsFrom(existing));
-  const [lieIndex, setLieIndex] = useState(() => {
-    const index = existing.findIndex((statement) => statement.is_lie);
-    return index === -1 ? 0 : index;
-  });
+  const [lieIndex, setLieIndex] = useState(() => lieIndexFrom(existing));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (existing.length === 3) {
-      setDrafts(existing.map((statement) => statement.content));
-      const index = existing.findIndex((statement) => statement.is_lie);
-      setLieIndex(index === -1 ? 0 : index);
-    }
-  }, [user]);
+  function resetForm(statements) {
+    setDrafts(draftsFrom(statements));
+    setLieIndex(lieIndexFrom(statements));
+  }
 
   function updateDraft(index, value) {
     setDrafts((current) => current.map((text, i) => (i === index ? value : text)));
@@ -69,7 +68,8 @@ export default function ProfilePage() {
           });
         }
       }
-      await refreshUser();
+      const updated = await refreshUser();
+      resetForm(updated?.statements || []);
       setNotice("Profile saved.");
     } catch (err) {
       setError(err.message);
@@ -83,11 +83,8 @@ export default function ProfilePage() {
     setNotice("");
     setSaving(true);
     try {
-      for (const statement of existing) {
-        await api(`/api/statements/${statement.id}`, { method: "DELETE" });
-      }
-      setDrafts(EMPTY);
-      setLieIndex(0);
+      await api("/api/statements", { method: "DELETE" });
+      resetForm([]);
       await refreshUser();
       setNotice("Statements deleted. Write a new set of three.");
     } catch (err) {

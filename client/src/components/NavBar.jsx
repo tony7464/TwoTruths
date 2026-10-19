@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { useAuth } from "../AuthContext";
+import { useAuth } from "../useAuth";
 
 const linkClass = ({ isActive }) =>
   isActive ? "text-emerald-800 font-semibold" : "text-stone-600 hover:text-stone-900";

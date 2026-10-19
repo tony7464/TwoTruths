@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "./api";
-
-const AuthContext = createContext(null);
+import AuthContext from "./auth-context";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -19,7 +18,10 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    refreshUser().finally(() => setLoading(false));
+    api("/api/check_session")
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   async function login(username, password) {
@@ -48,8 +50,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
 }
