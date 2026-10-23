@@ -100,7 +100,47 @@ def test_login_and_logout(client):
     assert "_password_hash" not in good.get_json()
 
     client.delete("/api/logout")
-    assert client.get("/api/check_session").status_code == 401
+    logged_out = client.get("/api/check_session")
+    assert logged_out.status_code == 200
+    assert logged_out.get_json() == {"user": None}
+
+
+def test_logout_clears_the_session_and_other_routes_stay_protected(client):
+    sign_up(client, "casey")
+    with client.session_transaction() as sess:
+        sess["extra"] = "stale"
+
+    client.delete("/api/logout")
+
+    with client.session_transaction() as sess:
+        assert "user_id" not in sess
+        assert "extra" not in sess
+
+    logged_out = client.get("/api/check_session")
+    assert logged_out.status_code == 200
+    assert logged_out.get_json() == {"user": None}
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = 999999
+    missing = client.get("/api/check_session")
+    assert missing.status_code == 200
+    assert missing.get_json() == {"user": None}
+
+    assert client.get("/api/users").status_code == 401
+    assert client.get("/api/statements").status_code == 401
+    assert client.post("/api/statements", json={}).status_code == 401
+    assert client.patch("/api/statements/1", json={}).status_code == 401
+    assert client.delete("/api/statements").status_code == 401
+    assert client.delete("/api/statements/1").status_code == 401
+    assert client.get("/api/messages").status_code == 401
+    assert client.post("/api/messages", json={}).status_code == 401
+    assert client.post("/api/guesses", json={}).status_code == 401
+
+    jordan = sign_up(client, "jordan")
+    session = client.get("/api/check_session")
+    assert session.status_code == 200
+    assert session.get_json()["id"] == jordan["id"]
+    assert session.get_json()["username"] == "jordan"
 
 
 def test_create_statements_with_one_lie(client):
@@ -222,6 +262,7 @@ def test_wrong_guess_is_final_and_blocks_messaging(client, other):
     assert body["is_correct"] is False
     assert body["messaging_unlocked"] is False
     assert body["score"] == 0
+    assert body["profile_score"] == 0
     assert body["fooled_count"] == 1
 
     message = other.post("/api/messages", json={
@@ -264,6 +305,7 @@ def test_correct_guess_opens_the_thread_for_both_people(client, other):
     assert body["is_correct"] is True
     assert body["messaging_unlocked"] is True
     assert body["score"] == 1
+    assert body["profile_score"] == 0
     assert body["fooled_count"] == 0
 
     sent = other.post("/api/messages", json={

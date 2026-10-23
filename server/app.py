@@ -1,4 +1,5 @@
 import re
+from functools import wraps
 
 from flask import request, session
 from sqlalchemy.exc import IntegrityError
@@ -31,11 +32,15 @@ def current_user():
     return db.session.get(User, user_id)
 
 
-def require_login():
-    user = current_user()
-    if not user:
-        return None, error("Please log in.", 401)
-    return user, None
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = current_user()
+        if not user:
+            return error("Please log in.", 401)
+        return view(user, *args, **kwargs)
+
+    return wrapped
 
 
 def clean_text(value, limit):
@@ -47,12 +52,37 @@ def clean_text(value, limit):
     return text, None
 
 
-def user_has_guesses(user_id):
-    return Guess.query.filter_by(profile_user_id=user_id).first() is not None
+def parse_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def locked_response(user):
+    # A guess locks the set. Later edits would rewrite results people already saw.
+    if user.statements_locked:
+        return error("Your statements are locked because someone has guessed.", 403)
+    return None
+
+
+def own_statement(user, statement_id):
+    statement = db.session.get(Statement, statement_id)
+    if not statement or statement.user_id != user.id:
+        return None, error("Statement not found.", 404)
+    locked = locked_response(user)
+    if locked:
+        return None, locked
+    return statement, None
+
+
+def valid_statement_set(profile):
+    statements = profile.statements
+    return len(statements) == 3 and sum(statement.is_lie for statement in statements) == 1
 
 
 def thread_is_open(user_a_id, user_b_id):
-    """A correct guess in either direction opens the thread for both people."""
+    # One correct guess, in either direction, opens messaging for both people.
     return Guess.query.filter(
         Guess.is_correct.is_(True),
         db.or_(
@@ -62,11 +92,7 @@ def thread_is_open(user_a_id, user_b_id):
     ).first() is not None
 
 
-def guess_for_viewer(viewer, profile):
-    guess = Guess.query.filter_by(guesser_id=viewer.id, profile_user_id=profile.id).first()
-    if not guess:
-        return None
-
+def revealed_guess(guess, profile):
     lie = next(statement for statement in profile.statements if statement.is_lie)
     return {
         "is_correct": guess.is_correct,
@@ -76,7 +102,16 @@ def guess_for_viewer(viewer, profile):
     }
 
 
+def guess_for_viewer(viewer, profile):
+    # Until this viewer guesses, the lie stays hidden. Then they see the lie they faced.
+    guess = Guess.query.filter_by(guesser_id=viewer.id, profile_user_id=profile.id).first()
+    if not guess:
+        return None
+    return revealed_guess(guess, profile)
+
+
 def validate_statement_set(items):
+    # Saved as a whole set: exactly three statements, exactly one of them the lie.
     if not isinstance(items, list) or len(items) != 3:
         return "Send exactly 3 statements."
 
@@ -145,32 +180,29 @@ def login():
 
 @app.delete("/api/logout")
 def logout():
-    session.pop("user_id", None)
+    session.clear()
     return {"message": "Logged out."}
 
 
 @app.get("/api/check_session")
 def check_session():
-    user, err = require_login()
-    if err:
-        return err
+    # Logged-out callers get 200 so the client can treat "no user" as a normal session check.
+    # Other routes still use login_required and return 401.
+    user = current_user()
+    if not user:
+        return {"user": None}
     return owner_user_schema.dump(user)
 
 
 # --- profiles ---
 
 @app.get("/api/users")
-def list_users():
-    user, err = require_login()
-    if err:
-        return err
-
+@login_required
+def list_users(user):
     profiles = User.query.filter(User.id != user.id).order_by(User.username).all()
     results = []
     for profile in profiles:
-        statements = profile.statements
-        lie_count = sum(1 for statement in statements if statement.is_lie)
-        if len(statements) != 3 or lie_count != 1:
+        if not valid_statement_set(profile):
             continue
         data = public_user_schema.dump(profile)
         data["my_guess"] = guess_for_viewer(user, profile)
@@ -181,18 +213,14 @@ def list_users():
 # --- statements ---
 
 @app.get("/api/statements")
-def list_my_statements():
-    user, err = require_login()
-    if err:
-        return err
+@login_required
+def list_my_statements(user):
     return owner_statements_schema.dump(user.statements)
 
 
 @app.post("/api/statements")
-def create_statements():
-    user, err = require_login()
-    if err:
-        return err
+@login_required
+def create_statements(user):
     if user.statements:
         return error("You already have statements. Edit them instead.", 400)
 
@@ -212,16 +240,11 @@ def create_statements():
 
 
 @app.patch("/api/statements/<int:statement_id>")
-def update_statement(statement_id):
-    user, err = require_login()
+@login_required
+def update_statement(user, statement_id):
+    statement, err = own_statement(user, statement_id)
     if err:
         return err
-
-    statement = db.session.get(Statement, statement_id)
-    if not statement or statement.user_id != user.id:
-        return error("Statement not found.", 404)
-    if user_has_guesses(user.id):
-        return error("Your statements are locked because someone has guessed.", 403)
 
     data = request.get_json() or {}
 
@@ -250,12 +273,11 @@ def update_statement(statement_id):
 
 
 @app.delete("/api/statements")
-def delete_statements():
-    user, err = require_login()
-    if err:
-        return err
-    if user_has_guesses(user.id):
-        return error("Your statements are locked because someone has guessed.", 403)
+@login_required
+def delete_statements(user):
+    locked = locked_response(user)
+    if locked:
+        return locked
 
     for statement in list(user.statements):
         db.session.delete(statement)
@@ -264,36 +286,26 @@ def delete_statements():
 
 
 @app.delete("/api/statements/<int:statement_id>")
-def delete_statement(statement_id):
-    user, err = require_login()
-    if err:
-        return err
-
-    statement = db.session.get(Statement, statement_id)
-    if not statement or statement.user_id != user.id:
-        return error("Statement not found.", 404)
-    if user_has_guesses(user.id):
-        return error("Your statements are locked because someone has guessed.", 403)
-
-    return error(
-        "Delete your whole set and write a new one; a profile needs exactly 3 statements.",
-        400,
-    )
+@login_required
+def delete_statement(user, statement_id):
+    statement, err = own_statement(user, statement_id)
+    if statement:
+        return error(
+            "Delete your whole set and write a new one; a profile needs exactly 3 statements.",
+            400,
+        )
+    return err
 
 
 # --- guesses ---
 
 @app.post("/api/guesses")
-def create_guess():
-    user, err = require_login()
-    if err:
-        return err
-
+@login_required
+def create_guess(user):
     data = request.get_json() or {}
-    try:
-        profile_user_id = int(data.get("profile_user_id"))
-        statement_id = int(data.get("statement_id"))
-    except (TypeError, ValueError):
+    profile_user_id = parse_int(data.get("profile_user_id"))
+    statement_id = parse_int(data.get("statement_id"))
+    if profile_user_id is None or statement_id is None:
         return error("Choose a profile and a statement.", 400)
 
     if profile_user_id == user.id:
@@ -306,23 +318,18 @@ def create_guess():
     statement = db.session.get(Statement, statement_id)
     if not statement or statement.user_id != profile.id:
         return error("That statement is not on this profile.", 400)
-
-    lie_count = sum(1 for item in profile.statements if item.is_lie)
-    if len(profile.statements) != 3 or lie_count != 1:
+    if not valid_statement_set(profile):
         return error("That profile is not ready to guess.", 400)
-
     if Guess.query.filter_by(guesser_id=user.id, profile_user_id=profile.id).first():
         return error("You already guessed this profile.", 409)
 
-    lie = next(item for item in profile.statements if item.is_lie)
-    is_correct = statement.id == lie.id
     guess = Guess(
         guesser_id=user.id,
         profile_user_id=profile.id,
         statement_id=statement.id,
-        is_correct=is_correct,
+        is_correct=statement.is_lie,
     )
-    if is_correct:
+    if statement.is_lie:
         user.score += 1
 
     db.session.add(guess)
@@ -332,24 +339,19 @@ def create_guess():
         db.session.rollback()
         return error("You already guessed this profile.", 409)
 
-    return {
-        "is_correct": is_correct,
-        "messaging_unlocked": is_correct,
-        "statement_id": statement.id,
-        "lie": {"id": lie.id, "content": lie.content},
-        "score": user.score,
-        "fooled_count": profile.fooled_count,
-    }, 201
+    payload = revealed_guess(guess, profile)
+    # score belongs to the guesser (nav). profile_score and fooled_count belong to the card.
+    payload["score"] = user.score
+    payload["profile_score"] = profile.score
+    payload["fooled_count"] = profile.fooled_count
+    return payload, 201
 
 
 # --- messages ---
 
 @app.get("/api/messages")
-def list_messages():
-    user, err = require_login()
-    if err:
-        return err
-
+@login_required
+def list_messages(user):
     messages = Message.query.filter(
         db.or_(Message.sender_id == user.id, Message.recipient_id == user.id)
     ).order_by(Message.created_at).all()
@@ -357,17 +359,12 @@ def list_messages():
 
 
 @app.post("/api/messages")
-def create_message():
-    user, err = require_login()
-    if err:
-        return err
-
+@login_required
+def create_message(user):
     data = request.get_json() or {}
-    try:
-        recipient_id = int(data.get("recipient_id"))
-    except (TypeError, ValueError):
+    recipient_id = parse_int(data.get("recipient_id"))
+    if recipient_id is None:
         return error("Choose who should receive this message.", 400)
-
     if recipient_id == user.id:
         return error("You cannot message yourself.", 403)
 
