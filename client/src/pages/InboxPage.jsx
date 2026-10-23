@@ -1,39 +1,24 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
+import { useState } from "react";
+import { api, run } from "../api";
 import { useAuth } from "../useAuth";
+import { useLoaded } from "../useLoaded";
 import ErrorNote from "../components/ErrorNote";
 
 export default function InboxPage() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState([]);
+  const { data: messages, setData: setMessages, error, setError, loading } = useLoaded("/api/messages", []);
   const [reply, setReply] = useState({});
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api("/api/messages")
-      .then(setMessages)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
 
   const threads = groupThreads(messages, user.id);
 
   async function sendReply(otherId) {
-    setError("");
-    try {
-      const created = await api("/api/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          recipient_id: otherId,
-          body: reply[otherId] || "",
-        }),
-      });
-      setMessages((current) => [...current, created]);
-      setReply((current) => ({ ...current, [otherId]: "" }));
-    } catch (err) {
-      setError(err.message);
-    }
+    const created = await run(setError, () => api("/api/messages", "POST", {
+      recipient_id: otherId,
+      body: reply[otherId] || "",
+    }));
+    if (!created) return;
+    setMessages((current) => [...current, created]);
+    setReply((current) => ({ ...current, [otherId]: "" }));
   }
 
   if (loading) return <p className="text-stone-600">Loading inbox...</p>;

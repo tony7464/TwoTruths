@@ -1,48 +1,65 @@
-import { useEffect, useState } from "react";
-import { api } from "./api";
-import AuthContext from "./auth-context";
+import { useEffect, useRef, useState } from "react";
+import { api, setUnauthorizedHandler } from "./api";
+import AuthContext from "./useAuth";
+
+function userFromSession(data) {
+  if (!data || data.user === null) return null;
+  return data;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const epoch = useRef(0);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      epoch.current += 1;
+      setUser(null);
+    });
+  }, []);
+
+  function fetchSession() {
+    return api("/api/check_session").then(userFromSession).catch(() => null);
+  }
 
   async function refreshUser() {
-    try {
-      const data = await api("/api/check_session");
-      setUser(data);
-      return data;
-    } catch {
-      setUser(null);
-      return null;
-    }
+    const ticket = epoch.current;
+    const data = await fetchSession();
+    if (ticket !== epoch.current) return null;
+    setUser(data);
+    return data;
   }
 
   useEffect(() => {
-    api("/api/check_session")
-      .then(setUser)
-      .catch(() => setUser(null))
+    const ticket = epoch.current;
+    fetchSession()
+      .then((data) => {
+        if (ticket === epoch.current) setUser(data);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   async function login(username, password) {
-    const data = await api("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-    setUser(data);
+    const ticket = ++epoch.current;
+    const next = await api("/api/login", "POST", { username, password });
+    if (ticket === epoch.current) setUser(next);
   }
 
   async function signup({ username, password, bio }) {
-    const data = await api("/api/signup", {
-      method: "POST",
-      body: JSON.stringify({ username, password, bio }),
-    });
-    setUser(data);
+    const ticket = ++epoch.current;
+    const next = await api("/api/signup", "POST", { username, password, bio });
+    if (ticket === epoch.current) setUser(next);
   }
 
   async function logout() {
-    await api("/api/logout", { method: "DELETE" });
+    const ticket = ++epoch.current;
     setUser(null);
+    try {
+      await api("/api/logout", "DELETE");
+    } catch {
+      if (ticket === epoch.current) setUser(null);
+    }
   }
 
   return (

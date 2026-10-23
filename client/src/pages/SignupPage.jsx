@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { run } from "../api";
 import { useAuth } from "../useAuth";
 import ErrorNote from "../components/ErrorNote";
 
@@ -15,12 +16,7 @@ export default function SignupPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
-    try {
-      await signup({ username, password, bio });
-    } catch (err) {
-      setError(err.message);
-    }
+    await run(setError, () => signup({ username, password, bio }));
   }
 
   return (

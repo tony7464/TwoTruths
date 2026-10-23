@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api";
+import { api, run } from "../api";
 import { useAuth } from "../useAuth";
 import ErrorNote from "../components/ErrorNote";
 
@@ -37,61 +37,53 @@ export default function ProfilePage() {
     setDrafts((current) => current.map((text, i) => (i === index ? value : text)));
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError("");
+  async function save(action) {
     setNotice("");
     setSaving(true);
-
     try {
+      await run(setError, action);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    await save(async () => {
       if (existing.length === 0) {
-        await api("/api/statements", {
-          method: "POST",
-          body: JSON.stringify({
-            statements: drafts.map((content, index) => ({
-              content,
-              is_lie: index === lieIndex,
-            })),
-          }),
+        await api("/api/statements", "POST", {
+          statements: drafts.map((content, index) => ({
+            content,
+            is_lie: index === lieIndex,
+          })),
         });
       } else {
         // Mark the new lie first so the profile never has zero lies.
-        await api(`/api/statements/${existing[lieIndex].id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ content: drafts[lieIndex], is_lie: true }),
+        await api(`/api/statements/${existing[lieIndex].id}`, "PATCH", {
+          content: drafts[lieIndex],
+          is_lie: true,
         });
         for (let index = 0; index < existing.length; index += 1) {
           if (index === lieIndex) continue;
-          await api(`/api/statements/${existing[index].id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ content: drafts[index], is_lie: false }),
+          await api(`/api/statements/${existing[index].id}`, "PATCH", {
+            content: drafts[index],
+            is_lie: false,
           });
         }
       }
       const updated = await refreshUser();
       resetForm(updated?.statements || []);
       setNotice("Profile saved.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   async function clearProfile() {
-    setError("");
-    setNotice("");
-    setSaving(true);
-    try {
-      await api("/api/statements", { method: "DELETE" });
+    await save(async () => {
+      await api("/api/statements", "DELETE");
       resetForm([]);
       await refreshUser();
       setNotice("Statements deleted. Write a new set of three.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   return (

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { run } from "../api";
 import { useAuth } from "../useAuth";
 import ErrorNote from "../components/ErrorNote";
 
@@ -14,12 +15,7 @@ export default function LoginPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
-    try {
-      await login(username, password);
-    } catch (err) {
-      setError(err.message);
-    }
+    await run(setError, () => login(username, password));
   }
 
   return (

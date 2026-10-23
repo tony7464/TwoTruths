@@ -1,23 +1,17 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
+import { useRef, useState } from "react";
+import { api, run } from "../api";
 import { useAuth } from "../useAuth";
+import { useLoaded } from "../useLoaded";
 import ErrorNote from "../components/ErrorNote";
 
 export default function BrowsePage() {
-  const { setUser } = useAuth();
-  const [profiles, setProfiles] = useState([]);
+  const { user, setUser } = useAuth();
+  const { data: profiles, setData: setProfiles, error, setError, loading } = useLoaded("/api/users", []);
   const [selected, setSelected] = useState({});
   const [drafts, setDrafts] = useState({});
   const [sent, setSent] = useState({});
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api("/api/users")
-      .then(setProfiles)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const [sending, setSending] = useState({});
+  const messageLock = useRef(new Set());
 
   function messageDraft(profile) {
     if (drafts[profile.id] !== undefined) return drafts[profile.id];
@@ -34,20 +28,17 @@ export default function BrowsePage() {
       return;
     }
 
-    setError("");
-    try {
-      const result = await api("/api/guesses", {
-        method: "POST",
-        body: JSON.stringify({
-          profile_user_id: profile.id,
-          statement_id: statementId,
-        }),
-      });
+    const result = await run(setError, () => api("/api/guesses", "POST", {
+      profile_user_id: profile.id,
+      statement_id: statementId,
+    }));
+    if (!result) return;
 
-      setProfiles((current) => current.map((item) => {
-        if (item.id !== profile.id) return item;
+    setProfiles((current) => current.map((item) => {
+      if (item.id === profile.id) {
         return {
           ...item,
+          score: result.profile_score,
           fooled_count: result.fooled_count,
           my_guess: {
             is_correct: result.is_correct,
@@ -56,27 +47,37 @@ export default function BrowsePage() {
             lie: result.lie,
           },
         };
-      }));
-      setUser((current) => ({ ...current, score: result.score }));
-    } catch (err) {
-      setError(err.message);
-    }
+      }
+      if (user && item.id === user.id) {
+        return { ...item, score: result.score };
+      }
+      return item;
+    }));
+    setUser((current) => {
+      if (!current || current.id !== user?.id) return current;
+      return { ...current, score: result.score };
+    });
   }
 
   async function sendMessage(profile) {
-    setError("");
-    try {
-      await api("/api/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          recipient_id: profile.id,
-          body: messageDraft(profile),
-        }),
-      });
-      setSent((current) => ({ ...current, [profile.id]: true }));
-    } catch (err) {
-      setError(err.message);
+    if (messageLock.current.has(profile.id)) return;
+    messageLock.current.add(profile.id);
+    setSending((current) => ({ ...current, [profile.id]: true }));
+
+    const created = await run(setError, () => api("/api/messages", "POST", {
+      recipient_id: profile.id,
+      body: messageDraft(profile),
+    }));
+
+    if (!created) {
+      messageLock.current.delete(profile.id);
+      setSending((current) => ({ ...current, [profile.id]: false }));
+      return;
     }
+
+    setDrafts((current) => ({ ...current, [profile.id]: "" }));
+    setSent((current) => ({ ...current, [profile.id]: true }));
+    setSending((current) => ({ ...current, [profile.id]: false }));
   }
 
   if (loading) return <p className="text-stone-600">Loading profiles...</p>;
@@ -105,6 +106,7 @@ export default function BrowsePage() {
           message={messageDraft(profile)}
           onMessageChange={(value) => setDrafts((current) => ({ ...current, [profile.id]: value }))}
           onSend={() => sendMessage(profile)}
+          sending={Boolean(sending[profile.id])}
           sent={sent[profile.id]}
         />
       ))}
@@ -120,6 +122,7 @@ function ProfileCard({
   message,
   onMessageChange,
   onSend,
+  sending,
   sent,
 }) {
   const guess = profile.my_guess;
@@ -190,12 +193,17 @@ function ProfileCard({
           ) : (
             <>
               <textarea
-                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm disabled:opacity-60"
                 rows="2"
                 value={message}
+                disabled={sending}
                 onChange={(event) => onMessageChange(event.target.value)}
               />
-              <button type="submit" className="rounded-md bg-stone-900 px-3 py-2 text-sm text-white">
+              <button
+                type="submit"
+                disabled={sending}
+                className="rounded-md bg-stone-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+              >
                 Send
               </button>
             </>
