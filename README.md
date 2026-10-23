@@ -10,6 +10,20 @@ Online profiles are bland, and first messages get ignored. TwoTruths is an icebr
 - A score counts correct guesses. A "fooled" count tracks wrong guesses against your profile.
 - An inbox where messaging unlocks after a correct guess in either direction.
 
+Statements are created and deleted as a whole set of three (`DELETE /api/statements`). A single-statement delete returns 400.
+
+## Screenshots
+
+![Login](docs/screenshots/login.png)
+
+![Browse](docs/screenshots/browse.png)
+
+![Guess](docs/screenshots/guess.png)
+
+![Profile](docs/screenshots/profile.png)
+
+![Inbox](docs/screenshots/inbox.png)
+
 ## Tech stack
 
 Flask, SQLAlchemy, Flask-Migrate, Marshmallow, and Flask-Bcrypt on the server, with SQLite. React, Vite, React Router, and Tailwind on the client.
@@ -58,7 +72,7 @@ Routes below are the ones defined in `server/app.py`. Auth means a logged-in ses
 | POST | `/api/signup` | No | Create an account and start a session. |
 | POST | `/api/login` | No | Log in and start a session. |
 | DELETE | `/api/logout` | No | End the current session. |
-| GET | `/api/check_session` | Yes | Return the logged-in user. |
+| GET | `/api/check_session` | No | Return the logged-in user, or `{"user": null}` when logged out. |
 | GET | `/api/users` | Yes | List other profiles that are ready to guess. |
 | GET | `/api/statements` | Yes | List your statements, including which one is the lie. |
 | POST | `/api/statements` | Yes | Create your set of three statements. |
