@@ -1,8 +1,12 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { api, run } from "../api";
 import { useAuth } from "../useAuth";
 import { useLoaded } from "../useLoaded";
 import ErrorNote from "../components/ErrorNote";
+import CubeErrorBoundary from "../components/cube/CubeErrorBoundary";
+import { useCubeMode } from "../components/cube/useCubeMode";
+
+const CubeScene = lazy(() => import("../components/cube/CubeScene"));
 
 export default function BrowsePage() {
   const { user, setUser } = useAuth();
@@ -11,7 +15,14 @@ export default function BrowsePage() {
   const [drafts, setDrafts] = useState({});
   const [sent, setSent] = useState({});
   const [sending, setSending] = useState({});
+  const [pickedId, setPickedId] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const messageLock = useRef(new Set());
+  const { mode, supported, chooseFlat, chooseCube } = useCubeMode(loadFailed);
+  const current = profiles.find((profile) => profile.id === pickedId)
+    || profiles.find((profile) => !profile.my_guess)
+    || profiles[0]
+    || null;
 
   function messageDraft(profile) {
     if (drafts[profile.id] !== undefined) return drafts[profile.id];
@@ -25,16 +36,16 @@ export default function BrowsePage() {
     const statementId = selected[profile.id];
     if (!statementId) {
       setError("Pick a statement first. You only get one guess.");
-      return;
+      return null;
     }
 
     const result = await run(setError, () => api("/api/guesses", "POST", {
       profile_user_id: profile.id,
       statement_id: statementId,
     }));
-    if (!result) return;
+    if (!result) return null;
 
-    setProfiles((current) => current.map((item) => {
+    setProfiles((items) => items.map((item) => {
       if (item.id === profile.id) {
         return {
           ...item,
@@ -53,16 +64,17 @@ export default function BrowsePage() {
       }
       return item;
     }));
-    setUser((current) => {
-      if (!current || current.id !== user?.id) return current;
-      return { ...current, score: result.score };
+    setUser((item) => {
+      if (!item || item.id !== user?.id) return item;
+      return { ...item, score: result.score };
     });
+    return result;
   }
 
   async function sendMessage(profile) {
     if (messageLock.current.has(profile.id)) return;
     messageLock.current.add(profile.id);
-    setSending((current) => ({ ...current, [profile.id]: true }));
+    setSending((items) => ({ ...items, [profile.id]: true }));
 
     const created = await run(setError, () => api("/api/messages", "POST", {
       recipient_id: profile.id,
@@ -71,13 +83,13 @@ export default function BrowsePage() {
 
     if (!created) {
       messageLock.current.delete(profile.id);
-      setSending((current) => ({ ...current, [profile.id]: false }));
+      setSending((items) => ({ ...items, [profile.id]: false }));
       return;
     }
 
-    setDrafts((current) => ({ ...current, [profile.id]: "" }));
-    setSent((current) => ({ ...current, [profile.id]: true }));
-    setSending((current) => ({ ...current, [profile.id]: false }));
+    setDrafts((items) => ({ ...items, [profile.id]: "" }));
+    setSent((items) => ({ ...items, [profile.id]: true }));
+    setSending((items) => ({ ...items, [profile.id]: false }));
   }
 
   if (loading) return <p className="text-stone-600">Loading profiles...</p>;
@@ -90,26 +102,63 @@ export default function BrowsePage() {
           One guess per person. A correct guess unlocks a message.
         </p>
       </div>
-      <ErrorNote message={error} />
-      {profiles.length === 0 && (
-        <p className="rounded-xl bg-white p-5 text-sm text-stone-600 shadow-sm">
-          No finished profiles yet. Check back after someone writes three statements.
-        </p>
+      {supported && (
+        <button
+          type="button"
+          onClick={mode === "cube" ? chooseFlat : chooseCube}
+          className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-50"
+        >
+          {mode === "cube" ? "Use flat view" : "Use 3D cube"}
+        </button>
       )}
-      {profiles.map((profile) => (
-        <ProfileCard
-          key={profile.id}
-          profile={profile}
-          selectedId={selected[profile.id]}
-          onSelect={(statementId) => setSelected((current) => ({ ...current, [profile.id]: statementId }))}
-          onGuess={() => lockInGuess(profile)}
-          message={messageDraft(profile)}
-          onMessageChange={(value) => setDrafts((current) => ({ ...current, [profile.id]: value }))}
-          onSend={() => sendMessage(profile)}
-          sending={Boolean(sending[profile.id])}
-          sent={sent[profile.id]}
-        />
-      ))}
+      <ErrorNote message={error} />
+      {mode === "cube" ? (
+        <CubeErrorBoundary onError={() => setLoadFailed(true)}>
+          <Suspense fallback={<p className="text-sm text-stone-600">Loading cube...</p>}>
+            <CubeScene
+              profiles={profiles}
+              current={current}
+              onPick={setPickedId}
+              selectedId={current ? selected[current.id] : undefined}
+              onSelect={(statementId) => {
+                if (!current) return;
+                setSelected((items) => ({ ...items, [current.id]: statementId }));
+              }}
+              onGuess={() => (current ? lockInGuess(current) : Promise.resolve(null))}
+              message={current ? messageDraft(current) : ""}
+              onMessageChange={(value) => {
+                if (!current) return;
+                setDrafts((items) => ({ ...items, [current.id]: value }));
+              }}
+              onSend={() => current && sendMessage(current)}
+              sending={Boolean(current && sending[current.id])}
+              sent={Boolean(current && sent[current.id])}
+            />
+          </Suspense>
+        </CubeErrorBoundary>
+      ) : (
+        <div className="space-y-4">
+          {profiles.length === 0 && (
+            <p className="rounded-xl bg-white p-5 text-sm text-stone-600 shadow-sm">
+              No finished profiles yet. Check back after someone writes three statements.
+            </p>
+          )}
+          {profiles.map((profile) => (
+            <ProfileCard
+              key={profile.id}
+              profile={profile}
+              selectedId={selected[profile.id]}
+              onSelect={(statementId) => setSelected((items) => ({ ...items, [profile.id]: statementId }))}
+              onGuess={() => lockInGuess(profile)}
+              message={messageDraft(profile)}
+              onMessageChange={(value) => setDrafts((items) => ({ ...items, [profile.id]: value }))}
+              onSend={() => sendMessage(profile)}
+              sending={Boolean(sending[profile.id])}
+              sent={sent[profile.id]}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
