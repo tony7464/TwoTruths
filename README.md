@@ -12,6 +12,16 @@ Online profiles are bland, and first messages get ignored. TwoTruths is an icebr
 
 Statements are created and deleted as a whole set of three (`DELETE /api/statements`). A single-statement delete returns 400.
 
+## 3D cube view
+
+Browse can show one animated cube instead of the flat cards. The front face is the current profile's statements, the left face is the player list, the back face is your profile, and the right face is the inbox. Tapping a statement only highlights it; "Lock in guess" sends it. A correct guess plays a short celebration and turns 90° to the inbox. A wrong guess shakes the cube, then turns it to the player list.
+
+The flat card list is used when reduced motion is on, the viewport is 640px wide or narrower, the pointer is coarse, WebGL is missing, the model fails to load, or the user chooses "Use flat view" (saved in localStorage). Profile and inbox routes stay flat.
+
+```bash
+cd client && npm test
+```
+
 ## Screenshots
 
 ![Login](docs/screenshots/login.png)
@@ -23,6 +33,8 @@ Statements are created and deleted as a whole set of three (`DELETE /api/stateme
 ![Profile](docs/screenshots/profile.png)
 
 ![Inbox](docs/screenshots/inbox.png)
+
+TODO: add a screenshot of the 3D cube view.
 
 ## Tech stack
 
