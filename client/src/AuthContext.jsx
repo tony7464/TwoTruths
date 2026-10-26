@@ -44,12 +44,14 @@ export function AuthProvider({ children }) {
     const ticket = ++epoch.current;
     const next = await api("/api/login", "POST", { username, password });
     if (ticket === epoch.current) setUser(next);
+    return next;
   }
 
   async function signup({ username, password, bio }) {
     const ticket = ++epoch.current;
     const next = await api("/api/signup", "POST", { username, password, bio });
     if (ticket === epoch.current) setUser(next);
+    return next;
   }
 
   async function logout() {
