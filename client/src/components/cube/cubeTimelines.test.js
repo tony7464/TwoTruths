@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { createCorrectTimeline, createSlamTimeline, createWrongTimeline } from "./cubeTimelines";
+import {
+  createAuthFailTimeline,
+  createAuthSuccessTimeline,
+  createCorrectTimeline,
+  createQuickTurnTimeline,
+  createSlamTimeline,
+  createWrongTimeline,
+} from "./cubeTimelines";
 
 function makeGroup(yaw = 0) {
   return {
@@ -72,5 +79,38 @@ test("a correct guess ends on the inbox face", () => {
   expect(eyes[0].morphTargetInfluences[1]).toBe(0);
   expect(group.position.y).toBeCloseTo(0);
   expect(group.scale.y).toBeCloseTo(1);
+  tl.kill();
+});
+
+test("a failed login ends settled after the shake", () => {
+  const group = makeGroup(0);
+  const eyes = [makeEye(), makeEye()];
+  const tl = createAuthFailTimeline(group, eyes);
+  tl.progress(1);
+  expect(group.rotation.z).toBeCloseTo(0);
+  expect(group.position.x).toBeCloseTo(0);
+  expect(eyes[0].morphTargetInfluences[2]).toBe(0);
+  tl.kill();
+});
+
+test("a successful login ends on the front face", () => {
+  const group = makeGroup(-Math.PI / 2);
+  const eyes = [makeEye(), makeEye()];
+  const tl = createAuthSuccessTimeline(group, eyes, () => {});
+  tl.progress(1);
+  expect(group.rotation.y).toBeCloseTo(0);
+  expect(group.position.y).toBeCloseTo(0);
+  expect(eyes[0].morphTargetInfluences[1]).toBe(0);
+  tl.kill();
+});
+
+test("a quick turn does not jump or shake", () => {
+  const group = makeGroup(0);
+  const eyes = [makeEye(), makeEye()];
+  const tl = createQuickTurnTimeline(group, "right", eyes);
+  tl.progress(1);
+  expect(group.rotation.y).toBeCloseTo(-Math.PI / 2);
+  expect(group.position.y).toBe(0);
+  expect(group.rotation.z).toBe(0);
   tl.kill();
 });

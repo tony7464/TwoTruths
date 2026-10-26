@@ -1,12 +1,22 @@
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
-import { InboxFace, PlayersFace, ProfileFace, StatementsFace } from "./CubeFaces";
+import { useContextBridge } from "its-fine";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  GuestNote,
+  InboxFace,
+  LoginFace,
+  PlayersFace,
+  ProfileFace,
+  SignupFace,
+  StatementsFace,
+} from "./CubeFaces";
 import { useCubeModel } from "./cubeModel";
 
-const DISTANCE = 2.1;
-const PANEL = "324px";
-const FRONT_H = "190px";
+// CSS pixels * distanceFactor / 400 = world units. 1.66 fills the 1.704 panel.
+const DISTANCE = 1.4;
+const PANEL = "474px";
+const FRONT_H = "280px";
 
 function indexNodes(root) {
   const map = {};
@@ -16,47 +26,76 @@ function indexNodes(root) {
   return map;
 }
 
-function FaceHtml({ position, rotation, interactive, width, height, children }) {
+function FaceHtml({ Bridge, position, rotation = [0, 0, 0], active, width, height, children }) {
+  const [heldOpen, setHeldOpen] = useState(active);
+  const [concealed, setConcealed] = useState(!active);
+
+  if (active !== heldOpen) {
+    setHeldOpen(active);
+    if (active) setConcealed(false);
+  }
+
+  useEffect(() => {
+    if (active) return undefined;
+    const timer = setTimeout(() => setConcealed(true), 180);
+    return () => clearTimeout(timer);
+  }, [active]);
+
   return (
     <Html
       transform
-      occlude="blending"
       position={position}
       rotation={rotation}
       distanceFactor={DISTANCE}
-      pointerEvents={interactive ? "auto" : "none"}
-      style={{ width, height }}
+      pointerEvents={active ? "auto" : "none"}
+      style={{
+        width,
+        height,
+        opacity: active ? 1 : 0,
+        visibility: concealed ? "hidden" : "visible",
+        transition: "opacity 160ms ease",
+        pointerEvents: active ? "auto" : "none",
+      }}
     >
-      <div
-        inert={interactive ? undefined : true}
-        aria-hidden={interactive ? undefined : true}
-        style={{
-          width: "100%",
-          height: "100%",
-          pointerEvents: interactive ? "auto" : "none",
-        }}
-      >
-        {children}
-      </div>
+      <Bridge>
+        <div
+          inert={active ? undefined : true}
+          aria-hidden={active ? undefined : true}
+          style={{
+            width: "100%",
+            height: "100%",
+            pointerEvents: active ? "auto" : "none",
+          }}
+        >
+          {children}
+        </div>
+      </Bridge>
     </Html>
   );
 }
 
 export default function Cube({
   anim,
-  profiles,
-  current,
-  onPick,
-  selectedId,
-  onSelect,
+  loggedIn,
+  game,
   onGuess,
-  message,
-  onMessageChange,
-  onSend,
-  sending,
-  sent,
+  onPick,
+  onShowPlayers,
+  onLoginSuccess,
+  onLoginFailure,
+  onSignupSuccess,
+  onSignupFailure,
+  onShowLogin,
+  onShowSignup,
 }) {
+  const Bridge = useContextBridge();
   const { scene } = useCubeModel();
+  const [htmlReady, setHtmlReady] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setHtmlReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   const cloned = useMemo(() => scene.clone(true), [scene]);
   const nodes = useMemo(() => indexNodes(cloned), [cloned]);
   const camera = useThree((state) => state.camera);
@@ -70,6 +109,7 @@ export default function Cube({
   }, [bind, camera, nodes, registerGroup, setCamera]);
 
   const open = (face) => activeFace === face && !locked;
+  const current = game.current;
 
   return (
     <group ref={groupRef}>
@@ -81,58 +121,83 @@ export default function Cube({
       <primitive object={nodes.Eye_L} />
       <primitive object={nodes.Eye_R} />
 
-      {/* Front text sits under the eyes (y about -0.85..0.15), not over them. */}
-      <FaceHtml
-        position={[0, -0.35, 0.975]}
-        interactive={open("front")}
-        width={PANEL}
-        height={FRONT_H}
-      >
-        <StatementsFace
-          profile={current}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          onGuess={onGuess}
-        />
-      </FaceHtml>
+      {htmlReady && <FaceHtml Bridge={Bridge} position={[0, -0.36, 0.975]} active={open("front")} width={PANEL} height={FRONT_H}>
+        {loggedIn ? (
+          <StatementsFace
+            profile={current}
+            selectedId={current ? game.selected[current.id] : undefined}
+            onSelect={(statementId) => {
+              if (!current) return;
+              game.setSelected((items) => ({ ...items, [current.id]: statementId }));
+            }}
+            onGuess={onGuess}
+            onShowPlayers={onShowPlayers}
+            loading={game.loading}
+          />
+        ) : (
+          <LoginFace
+            onSuccess={onLoginSuccess}
+            onFailure={onLoginFailure}
+            onShowSignup={onShowSignup}
+          />
+        )}
+      </FaceHtml>}
 
-      <FaceHtml
+      {htmlReady && <FaceHtml
+        Bridge={Bridge}
         position={[0, 0, -0.975]}
         rotation={[0, Math.PI, 0]}
-        interactive={open("back")}
+        active={open("back")}
         width={PANEL}
         height={PANEL}
       >
-        <ProfileFace />
-      </FaceHtml>
+        {loggedIn ? <ProfileFace /> : <GuestNote>Log in to build your profile</GuestNote>}
+      </FaceHtml>}
 
-      <FaceHtml
+      {htmlReady && <FaceHtml
+        Bridge={Bridge}
         position={[-0.975, 0, 0]}
         rotation={[0, -Math.PI / 2, 0]}
-        interactive={open("left")}
+        active={open("left")}
         width={PANEL}
         height={PANEL}
       >
-        <PlayersFace profiles={profiles} currentId={current?.id} onPick={onPick} />
-      </FaceHtml>
+        {loggedIn ? (
+          <PlayersFace profiles={game.profiles} currentId={current?.id} onPick={onPick} />
+        ) : (
+          <GuestNote>Log in to see who is playing</GuestNote>
+        )}
+      </FaceHtml>}
 
-      <FaceHtml
+      {htmlReady && <FaceHtml
+        Bridge={Bridge}
         position={[0.975, 0, 0]}
         rotation={[0, Math.PI / 2, 0]}
-        interactive={open("right")}
+        active={open("right")}
         width={PANEL}
         height={PANEL}
       >
-        <InboxFace
-          profile={current}
-          message={message}
-          onMessageChange={onMessageChange}
-          onSend={onSend}
-          sending={sending}
-          sent={sent}
-          opacity={inboxOpacity}
-        />
-      </FaceHtml>
+        {loggedIn ? (
+          <InboxFace
+            profile={current}
+            message={current ? game.messageDraft(current) : ""}
+            onMessageChange={(value) => {
+              if (!current) return;
+              game.setDrafts((items) => ({ ...items, [current.id]: value }));
+            }}
+            onSend={() => current && game.sendMessage(current)}
+            sending={Boolean(current && game.sending[current.id])}
+            sent={Boolean(current && game.sent[current.id])}
+            opacity={inboxOpacity}
+          />
+        ) : (
+          <SignupFace
+            onSuccess={onSignupSuccess}
+            onFailure={onSignupFailure}
+            onShowLogin={onShowLogin}
+          />
+        )}
+      </FaceHtml>}
     </group>
   );
 }

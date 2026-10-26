@@ -125,6 +125,91 @@ export function createCorrectTimeline({ group, eyes, camera, opacity, onSpinStar
   return tl;
 }
 
+export function createAuthFailTimeline(group, eyes) {
+  const tl = gsap.timeline({ paused: true });
+  const amp = (7 * Math.PI) / 180;
+  const mood = { sad: 1 };
+
+  tl.call(() => {
+    clearMoods(eyes);
+    setEyeMorph(eyes, "Sad_Disapproval", 1);
+  });
+
+  for (let beat = 0; beat < 4; beat += 1) {
+    const sign = beat % 2 === 0 ? 1 : -1;
+    const mag = 1 - beat * 0.22;
+    tl.to(group.rotation, { z: sign * amp * mag, duration: 0.2, ease: "power1.inOut" });
+    tl.to(group.position, { x: sign * 0.06 * mag, duration: 0.2, ease: "power1.inOut" }, "<");
+  }
+
+  tl.to(group.rotation, { z: 0, duration: 0.16, ease: "power2.out" });
+  tl.to(group.position, { x: 0, duration: 0.16, ease: "power2.out" }, "<");
+  tl.to(mood, {
+    sad: 0,
+    duration: 0.3,
+    onUpdate: () => setEyeMorph(eyes, "Sad_Disapproval", mood.sad),
+  });
+  tl.call(() => setEyeMorph(eyes, "Sad_Disapproval", 0));
+  return tl;
+}
+
+export function createAuthSuccessTimeline(group, eyes, onSpinStart) {
+  const tl = gsap.timeline({ paused: true });
+
+  tl.call(() => {
+    clearMoods(eyes);
+    setEyeMorph(eyes, "Happy", 1);
+  });
+  tl.to(group.scale, { y: 0.94, x: 1.03, z: 1.03, duration: 0.12, ease: "power2.in" });
+  tl.to(group.position, { y: 0.35, duration: 0.18, ease: "power2.out" });
+  tl.to(group.scale, { y: 1.08, x: 0.96, z: 0.96, duration: 0.18, ease: "power2.out" }, "<");
+  tl.to(group.rotation, { x: 0.18, duration: 0.1, ease: "power1.inOut" });
+  tl.to(group.rotation, { x: 0, duration: 0.1, ease: "power1.inOut" });
+  tl.to(group.position, { y: 0, duration: 0.16, ease: "bounce.out" });
+  tl.to(group.scale, { x: 1, y: 1, z: 1, duration: 0.14, ease: "power2.out" }, "<");
+  tl.set(group.rotation, { x: 0, z: 0 });
+  tl.call(() => onSpinStart?.());
+  tl.to(group.rotation, {
+    y: () => shortestYaw(group.rotation.y, faceYaw("front")),
+    duration: SLAM_SECONDS,
+    ease: slamEase,
+  });
+  tl.call(() => clearMoods(eyes));
+  return tl;
+}
+
+// Reduced motion: a short yaw turn, no jump and no shake.
+export function createQuickTurnTimeline(group, face, eyes, mood) {
+  const tl = gsap.timeline({ paused: true });
+  tl.call(() => {
+    clearMoods(eyes);
+    if (mood) setEyeMorph(eyes, mood, 1);
+  });
+  tl.to(group.rotation, {
+    y: () => shortestYaw(group.rotation.y, faceYaw(face)),
+    duration: 0.22,
+    ease: "power2.inOut",
+  });
+  tl.call(() => clearMoods(eyes));
+  return tl;
+}
+
+export function createQuickMoodTimeline(eyes, mood) {
+  const state = { value: 0 };
+  return gsap.timeline({ paused: true })
+    .call(() => clearMoods(eyes))
+    .to(state, {
+      value: 1,
+      duration: 0.12,
+      onUpdate: () => setEyeMorph(eyes, mood, state.value),
+    })
+    .to(state, {
+      value: 0,
+      duration: 0.18,
+      onUpdate: () => setEyeMorph(eyes, mood, state.value),
+    });
+}
+
 export function createIdleTimeline(eyes) {
   const state = { blink: 0, lookLeft: 0, lookRight: 0 };
   const tweens = [];

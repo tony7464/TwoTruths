@@ -1,22 +1,52 @@
-import ProfileEditor from "../ProfileEditor";
+import { LoginForm, SignupForm } from "../AuthForms";
 import InboxThreads from "../InboxThreads";
+import ProfileEditor from "../ProfileEditor";
 import { useAuth } from "../../useAuth";
 import { useInbox } from "../useInbox";
 
-const shell = "h-full overflow-auto bg-white/95 p-2 text-stone-900";
+const shell = "h-full overflow-auto rounded-xl p-3 text-[15px] leading-snug text-stone-800";
+const shellStyle = {
+  background: "#f4fbff",
+  border: "1px solid #d3eaf8",
+  boxShadow: "0 1px 2px rgba(80, 120, 150, 0.08)",
+};
 
-export function StatementsFace({ profile, selectedId, onSelect, onGuess }) {
+const linkClass = "mt-2 text-[15px] text-emerald-800 underline";
+
+export function StatementsFace({
+  profile,
+  selectedId,
+  onSelect,
+  onGuess,
+  onShowPlayers,
+  loading,
+}) {
   const { user } = useAuth();
 
+  if (loading) {
+    return <p className={shell} style={shellStyle}>Loading profiles...</p>;
+  }
+
   if (!profile) {
-    return <p className={`${shell} text-sm`}>Pick someone from the player list</p>;
+    return (
+      <div className={`${shell} space-y-2`} style={shellStyle}>
+        <p>Pick someone from the Players face</p>
+        <button
+          type="button"
+          onClick={onShowPlayers}
+          className="rounded-md bg-emerald-700 px-2 py-1 text-[15px] text-white hover:bg-emerald-800"
+        >
+          Show players
+        </button>
+      </div>
+    );
   }
 
   const guess = profile.my_guess;
 
   return (
-    <div className={`${shell} space-y-1.5`}>
-      <p className="text-xs text-stone-500">{profile.username}</p>
+    <div className={`${shell} space-y-1.5`} style={shellStyle}>
+      <p className="text-[15px] text-stone-500">{profile.username}</p>
       <ul className="space-y-1">
         {profile.statements.map((statement) => {
           const picked = guess?.statement_id === statement.id;
@@ -29,13 +59,13 @@ export function StatementsFace({ profile, selectedId, onSelect, onGuess }) {
                 disabled={Boolean(guess)}
                 aria-pressed={chosen}
                 onClick={() => onSelect(statement.id)}
-                className={`w-full rounded-md border px-2 py-1 text-left text-sm leading-tight ${
-                  chosen && !guess ? "border-emerald-700 bg-emerald-50" : "border-stone-200"
+                className={`w-full rounded-md border px-2 py-1 text-left text-[15px] leading-tight ${
+                  chosen && !guess ? "border-emerald-700 bg-emerald-50" : "border-[#d5e8f6] bg-white"
                 } ${guess ? "cursor-default" : "hover:border-stone-400"}`}
               >
                 {statement.content}
-                {picked && <span className="ml-2 text-xs text-stone-500">Your guess</span>}
-                {isLie && <span className="ml-2 text-xs font-medium text-rose-700">Lie</span>}
+                {picked && <span className="ml-2 text-[13px] text-stone-500">Your guess</span>}
+                {isLie && <span className="ml-2 text-[13px] font-medium text-rose-700">Lie</span>}
               </button>
             </li>
           );
@@ -45,17 +75,17 @@ export function StatementsFace({ profile, selectedId, onSelect, onGuess }) {
         <button
           type="button"
           onClick={onGuess}
-          className="rounded-md bg-emerald-700 px-2 py-1 text-sm text-white hover:bg-emerald-800"
+          className="rounded-md bg-emerald-700 px-2 py-1 text-[15px] text-white hover:bg-emerald-800"
         >
           Lock in guess
         </button>
       )}
       {guess && (
-        <p className="text-sm text-stone-700">
+        <p className="text-[15px] text-stone-700">
           {guess.is_correct ? "Correct!" : "That was your one guess. Messaging stays closed."}
         </p>
       )}
-      {guess && <p className="text-xs text-stone-500">score {user?.score}</p>}
+      {guess && <p className="text-[13px] text-stone-500">score {user?.score}</p>}
     </div>
   );
 }
@@ -65,9 +95,9 @@ export function ProfileFace() {
   if (!user) return null;
 
   return (
-    <div className={shell}>
-      {user.bio ? <p className="text-sm text-stone-600">{user.bio}</p> : null}
-      <p className="mb-2 text-xs text-stone-500">score {user.score}</p>
+    <div className={shell} style={shellStyle}>
+      {user.bio ? <p className="text-[15px] text-stone-600">{user.bio}</p> : null}
+      <p className="mb-2 text-[13px] text-stone-500">score {user.score}</p>
       <ProfileEditor compact />
     </div>
   );
@@ -80,9 +110,9 @@ function guessBadge(profile) {
 
 export function PlayersFace({ profiles, currentId, onPick }) {
   return (
-    <div className={`${shell} space-y-1`} aria-label="Players">
+    <div className={`${shell} space-y-1`} style={shellStyle} aria-label="Players">
       {profiles.length === 0 && (
-        <p className="text-sm text-stone-600">No finished profiles yet.</p>
+        <p className="text-[15px] text-stone-600">No finished profiles yet.</p>
       )}
       {profiles.map((profile) => {
         const badge = guessBadge(profile);
@@ -93,13 +123,13 @@ export function PlayersFace({ profiles, currentId, onPick }) {
             type="button"
             aria-current={current ? "true" : undefined}
             onClick={() => onPick(profile.id)}
-            className={`flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-sm ${
-              current ? "border-emerald-700 bg-emerald-50" : "border-stone-200 hover:border-stone-400"
+            className={`flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-[15px] ${
+              current ? "border-emerald-700 bg-emerald-50" : "border-[#d5e8f6] bg-white hover:border-stone-400"
             }`}
           >
             <span className="font-medium">{profile.username}</span>
-            <span className="text-xs text-stone-500">score {profile.score}</span>
-            <span className={`rounded px-1 text-xs ${
+            <span className="text-[13px] text-stone-500">score {profile.score}</span>
+            <span className={`rounded px-1 text-[13px] ${
               badge === "correct" ? "bg-emerald-100 text-emerald-800" : ""
             } ${badge === "wrong" ? "bg-rose-100 text-rose-800" : ""} ${
               badge === "not yet" ? "bg-stone-100 text-stone-600" : ""
@@ -127,7 +157,7 @@ export function InboxFace({
   const unlocked = Boolean(profile?.my_guess?.messaging_unlocked);
 
   return (
-    <div className={shell} style={{ opacity }}>
+    <div className={shell} style={{ ...shellStyle, opacity }}>
       {unlocked ? (
         <form
           className="mb-2 space-y-1"
@@ -136,13 +166,13 @@ export function InboxFace({
             onSend();
           }}
         >
-          <p className="text-sm font-medium text-emerald-800">Correct. Send the first message.</p>
+          <p className="text-[15px] font-medium text-emerald-800">Correct. Send the first message.</p>
           {sent ? (
-            <p className="text-sm text-stone-600">Sent. It is in your inbox.</p>
+            <p className="text-[15px] text-stone-600">Sent. It is in your inbox.</p>
           ) : (
             <>
               <textarea
-                className="w-full rounded-md border border-stone-300 px-2 py-1 text-sm disabled:opacity-60"
+                className="w-full rounded-md border border-[#d3e9f8] bg-white px-2 py-1 text-[15px] disabled:opacity-60"
                 rows="2"
                 value={message}
                 disabled={sending}
@@ -152,7 +182,7 @@ export function InboxFace({
               <button
                 type="submit"
                 disabled={sending}
-                className="rounded-md bg-stone-900 px-2 py-1 text-sm text-white disabled:opacity-60"
+                className="rounded-md bg-stone-900 px-2 py-1 text-[15px] text-white disabled:opacity-60"
               >
                 Send
               </button>
@@ -160,10 +190,10 @@ export function InboxFace({
           )}
         </form>
       ) : (
-        <p className="mb-2 text-sm text-stone-700">Guess someone correctly to unlock messaging</p>
+        <p className="mb-2 text-[15px] text-stone-700">Guess someone correctly to unlock messaging</p>
       )}
       {inbox.loading ? (
-        <p className="text-sm text-stone-600">Loading inbox...</p>
+        <p className="text-[15px] text-stone-600">Loading inbox...</p>
       ) : (
         <InboxThreads
           compact
@@ -175,5 +205,39 @@ export function InboxFace({
         />
       )}
     </div>
+  );
+}
+
+export function LoginFace({ onSuccess, onFailure, onShowSignup }) {
+  return (
+    <div className={shell} style={shellStyle}>
+      <h2 className="mb-2 text-base font-semibold">Log in</h2>
+      <LoginForm compact onSuccess={onSuccess} onFailure={onFailure} />
+      <button type="button" onClick={onShowSignup} className={linkClass}>
+        Need an account? Sign up
+      </button>
+      <p className="mt-2 text-[13px] text-stone-500">
+        Demo users: alex, jordan, sam, riley. Password: password123
+      </p>
+    </div>
+  );
+}
+
+export function SignupFace({ onSuccess, onFailure, onShowLogin }) {
+  return (
+    <div className={shell} style={shellStyle}>
+      <h2 className="mb-1 text-base font-semibold">Sign up</h2>
+      <p className="mb-2 text-[13px] text-stone-600">You will add two truths and one lie next.</p>
+      <SignupForm compact onSuccess={onSuccess} onFailure={onFailure} />
+      <button type="button" onClick={onShowLogin} className={linkClass}>
+        Already have an account? Log in
+      </button>
+    </div>
+  );
+}
+
+export function GuestNote({ children }) {
+  return (
+    <p className={shell} style={shellStyle}>{children}</p>
   );
 }
