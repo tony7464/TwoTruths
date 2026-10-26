@@ -14,12 +14,14 @@ Statements are created and deleted as a whole set of three (`DELETE /api/stateme
 
 ## 3D cube view
 
-Browse can show one animated cube instead of the flat cards. The front face is the current profile's statements, the left face is the player list, the back face is your profile, and the right face is the inbox. Tapping a statement only highlights it; "Lock in guess" sends it. A correct guess plays a short celebration and turns 90° to the inbox. A wrong guess shakes the cube, then turns it to the player list.
+The cube is the whole site. Front is the statements (or the log-in form when signed out), left is the player list, right is the inbox (or sign up), and back is your profile. Top and bottom stay blank. There is no navigation bar in this view: the corner shows the title, and once you are signed in, your name, score, and Log out. Tapping a statement only highlights it; "Lock in guess" sends it. A correct guess celebrates and turns to the inbox. A wrong guess shakes the cube, then turns it to the player list. A bad login shakes the cube. A good login or sign-up nods, then turns to the statements.
 
-The flat card list is used when reduced motion is on, the viewport is 640px wide or narrower, the pointer is coarse, WebGL is missing, the model fails to load, or the user chooses "Use flat view" (saved in localStorage). Profile and inbox routes stay flat.
+The flat pages and the top navigation are only the fallback. That happens when reduced motion is on (unless you opt in), the screen is narrow or the pointer is coarse, WebGL is missing, the cube fails to load, or you choose "Use flat view". A line above the flat content names which of those it is. Reduced motion and narrow or touch screens can press "Show 3D cube anyway"; that choice is saved in the browser. Reduced motion then uses quick turns, without the jump or the shake. Missing WebGL and a failed load stay on the flat pages.
 
 ```bash
 cd client && npm test
+cd client && npm run build && npx oxlint
+cd server && pytest
 ```
 
 ## Screenshots
