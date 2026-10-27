@@ -1,20 +1,18 @@
+// Chooses the 3D cube or the flat pages, and lists the flat routes.
 import { lazy, Suspense, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
-import { AuthProvider } from "./AuthContext";
-import { useAuth } from "./useAuth";
+import { AuthProvider, useAuth } from "./AuthContext";
 import FlatModeNote from "./components/FlatModeNote";
 import NavBar from "./components/NavBar";
-import CubeErrorBoundary from "./components/cube/CubeErrorBoundary";
-import { CubeFallbackProvider } from "./components/cube/cubeFallback";
-import { STAGE_BACKGROUND } from "./components/cube/cubeStage";
-import { useCubeMode } from "./components/cube/useCubeMode";
+import ProfileEditor from "./components/ProfileEditor";
+import CubeErrorBoundary from "./cube/CubeErrorBoundary";
+import { CubeFallbackContext, STAGE_BACKGROUND, useCubeMode } from "./cube/useCubeMode";
 import BrowsePage from "./pages/BrowsePage";
 import InboxPage from "./pages/InboxPage";
 import LoginPage from "./pages/LoginPage";
-import ProfilePage from "./pages/ProfilePage";
 import SignupPage from "./pages/SignupPage";
 
-const CubeModeApp = lazy(() => import("./components/cube/CubeModeApp"));
+const CubeModeApp = lazy(() => import("./cube/CubeModeApp"));
 
 function CubeLoading() {
   return (
@@ -53,7 +51,7 @@ function FlatRoutes() {
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Navigate to="/browse" replace />} />
         <Route path="/browse" element={<BrowsePage />} />
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile" element={<ProfileEditor />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/players" element={<Navigate to="/browse" replace />} />
       </Route>
@@ -72,7 +70,7 @@ function ModeSwitch() {
   }
 
   return (
-    <CubeFallbackProvider value={cube}>
+    <CubeFallbackContext.Provider value={cube}>
       {cube.mode === "cube" ? (
         <CubeErrorBoundary onError={(error) => setLoadError(error?.message || "unknown error")}>
           <Suspense fallback={<CubeLoading />}>
@@ -82,7 +80,7 @@ function ModeSwitch() {
       ) : (
         <FlatRoutes />
       )}
-    </CubeFallbackProvider>
+    </CubeFallbackContext.Provider>
   );
 }
 

@@ -1,3 +1,4 @@
+// If the cube throws while loading, tell the app so it can switch to the flat pages.
 import { Component } from "react";
 
 export default class CubeErrorBoundary extends Component {
@@ -11,7 +12,6 @@ export default class CubeErrorBoundary extends Component {
   }
 
   componentDidCatch(error) {
-    console.error(error);
     this.props.onError?.(error);
   }
 

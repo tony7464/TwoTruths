@@ -1,3 +1,4 @@
+// One thread per person, with a reply box under each.
 import ErrorNote from "./ErrorNote";
 
 export default function InboxThreads({ threads, reply, setReply, sendReply, error, compact = false }) {

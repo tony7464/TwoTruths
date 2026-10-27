@@ -1,5 +1,6 @@
+// Top bar on the flat pages: links, score, and log out.
 import { Link, NavLink } from "react-router-dom";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../AuthContext";
 
 const linkClass = ({ isActive }) =>
   isActive ? "text-emerald-800 font-semibold" : "text-stone-600 hover:text-stone-900";

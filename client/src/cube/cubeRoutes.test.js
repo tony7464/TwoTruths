@@ -1,3 +1,4 @@
+// Each URL opens the matching cube face, and each face writes its URL.
 import { expect, test } from "vitest";
 import { faceToRoute, routeToFace } from "./cubeRoutes";
 

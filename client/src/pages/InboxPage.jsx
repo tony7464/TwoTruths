@@ -1,3 +1,4 @@
+// Flat inbox. A thread opens after a correct guess in either direction.
 import InboxThreads from "../components/InboxThreads";
 import { useInbox } from "../components/useInbox";
 

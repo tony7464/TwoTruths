@@ -1,3 +1,4 @@
+// Eye shapes on the cube model.
 const MOODS = [
   "Blink",
   "Happy",
@@ -16,7 +17,7 @@ export function setEyeMorph(eyes, name, value) {
   }
 }
 
-export function readEyeMorph(eye, name) {
+function readEyeMorph(eye, name) {
   const index = eye?.morphTargetDictionary?.[name];
   if (index === undefined || !eye.morphTargetInfluences) return 0;
   return eye.morphTargetInfluences[index] ?? 0;

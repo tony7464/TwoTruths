@@ -1,8 +1,9 @@
-import { LoginForm, SignupForm } from "../AuthForms";
-import InboxThreads from "../InboxThreads";
-import ProfileEditor from "../ProfileEditor";
-import { useAuth } from "../../useAuth";
-import { useInbox } from "../useInbox";
+// The words drawn on each face of the cube.
+import { useAuth } from "../AuthContext";
+import { LoginForm, SignupForm } from "../components/AuthForms";
+import InboxThreads from "../components/InboxThreads";
+import ProfileEditor from "../components/ProfileEditor";
+import { useInbox } from "../components/useInbox";
 
 const shell = "h-full overflow-auto rounded-xl p-3 text-[15px] leading-snug text-stone-800";
 const shellStyle = {
@@ -105,7 +106,14 @@ export function ProfileFace() {
 
 function guessBadge(profile) {
   if (!profile.my_guess) return "not yet";
-  return profile.my_guess.is_correct ? "correct" : "wrong";
+  if (profile.my_guess.is_correct) return "correct";
+  return "wrong";
+}
+
+function badgeClass(badge) {
+  if (badge === "correct") return "bg-emerald-100 text-emerald-800";
+  if (badge === "wrong") return "bg-rose-100 text-rose-800";
+  return "bg-stone-100 text-stone-600";
 }
 
 export function PlayersFace({ profiles, currentId, onPick }) {
@@ -129,12 +137,7 @@ export function PlayersFace({ profiles, currentId, onPick }) {
           >
             <span className="font-medium">{profile.username}</span>
             <span className="text-[13px] text-stone-500">score {profile.score}</span>
-            <span className={`rounded px-1 text-[13px] ${
-              badge === "correct" ? "bg-emerald-100 text-emerald-800" : ""
-            } ${badge === "wrong" ? "bg-rose-100 text-rose-800" : ""} ${
-              badge === "not yet" ? "bg-stone-100 text-stone-600" : ""
-            }`}
-            >
+            <span className={`rounded px-1 text-[13px] ${badgeClass(badge)}`}>
               {badge}
             </span>
           </button>

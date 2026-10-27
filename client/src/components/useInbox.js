@@ -1,9 +1,24 @@
-import { useState } from "react";
+// Loads messages and groups them into one thread per person.
+import { useEffect, useState } from "react";
 import { api, run } from "../api";
-import { useAuth } from "../useAuth";
-import { useLoaded } from "../useLoaded";
+import { useAuth } from "../AuthContext";
 
-export function groupThreads(messages, userId) {
+function useLoaded(path, initial) {
+  const [data, setData] = useState(initial);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api(path)
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [path]);
+
+  return { data, setData, error, setError, loading };
+}
+
+function groupThreads(messages, userId) {
   const threads = new Map();
 
   for (const message of messages) {

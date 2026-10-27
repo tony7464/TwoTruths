@@ -1,3 +1,4 @@
+// The 3D canvas, lights, and the shadow under the cube.
 import { ContactShadows, Html, useGLTF } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useEffect, useRef } from "react";

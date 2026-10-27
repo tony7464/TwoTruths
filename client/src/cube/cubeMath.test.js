@@ -1,3 +1,4 @@
+// Slam ease overshoots, and face turns take the short way around.
 import { describe, expect, test } from "vitest";
 import { faceYaw, shortestYaw, slamEase } from "./cubeMath";
 

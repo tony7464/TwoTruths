@@ -1,4 +1,4 @@
-// Vite forwards /api to Flask. credentials sends the session cookie.
+// Calls the Flask API. Vite forwards /api, and credentials sends the session cookie.
 let onUnauthorized = () => {};
 
 export function setUnauthorizedHandler(handler) {

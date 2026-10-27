@@ -1,4 +1,5 @@
-import { useCubeFallback } from "./cube/cubeFallbackContext";
+// Names why the cube is off, and offers the buttons that turn it back on.
+import { useCubeFallback } from "../cube/useCubeMode";
 
 const buttonClass = "rounded-md border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-50";
 

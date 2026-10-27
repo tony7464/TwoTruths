@@ -1,3 +1,4 @@
+// Plays cube turns. Refs hold the Three.js objects GSAP animates between renders.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { faceYaw } from "./cubeMath";
 import {
@@ -10,7 +11,7 @@ import {
   createSlamTimeline,
   createWrongTimeline,
   settlePose,
-} from "./cubeTimelines";
+} from "./timelines";
 
 export function useCubeAnimations(initialFace = "front", quick = false) {
   const groupRef = useRef(null);

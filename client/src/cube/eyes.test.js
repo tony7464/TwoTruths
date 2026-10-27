@@ -1,3 +1,4 @@
+// Both eyes share a morph, and a blink does not stack on a full happy.
 import { expect, test } from "vitest";
 import { setBlink, setEyeMorph } from "./eyes";
 

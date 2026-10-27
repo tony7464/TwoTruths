@@ -1,3 +1,4 @@
+// Finished animations land on the right face and clear the eye mood.
 import { expect, test } from "vitest";
 import {
   createAuthFailTimeline,
@@ -6,7 +7,7 @@ import {
   createQuickTurnTimeline,
   createSlamTimeline,
   createWrongTimeline,
-} from "./cubeTimelines";
+} from "./timelines";
 
 function makeGroup(yaw = 0) {
   return {

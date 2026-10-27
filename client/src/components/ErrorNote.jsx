@@ -1,3 +1,4 @@
+// Red error line. Renders nothing when the message is empty.
 export default function ErrorNote({ message }) {
   if (!message) return null;
   return (

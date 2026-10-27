@@ -1,7 +1,8 @@
+// The flat log-in and sign-up pages still render their fields.
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { expect, test, vi } from "vitest";
-import AuthContext from "../useAuth";
+import AuthContext from "../AuthContext";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 

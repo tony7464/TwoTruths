@@ -1,6 +1,7 @@
+// Flat browse shows profiles, and a guess is sent only by Lock in guess.
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import AuthContext from "../useAuth";
+import AuthContext from "../AuthContext";
 import BrowsePage from "./BrowsePage";
 
 const profile = {

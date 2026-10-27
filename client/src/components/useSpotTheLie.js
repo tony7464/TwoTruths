@@ -1,6 +1,18 @@
+// Guessing state shared by the cube and the flat browse page.
 import { useEffect, useRef, useState } from "react";
-import { api, run } from "../../api";
-import { useAuth } from "../../useAuth";
+import { api, run } from "../api";
+import { useAuth } from "../AuthContext";
+
+function pickCurrentProfile(profiles, pickedId) {
+  for (const profile of profiles) {
+    if (profile.id === pickedId) return profile;
+  }
+  for (const profile of profiles) {
+    if (!profile.my_guess) return profile;
+  }
+  if (profiles.length === 0) return null;
+  return profiles[0];
+}
 
 export function useSpotTheLie(active) {
   const { user, setUser } = useAuth();
@@ -14,6 +26,7 @@ export function useSpotTheLie(active) {
   const [session, setSession] = useState(() => ({ active, loading: Boolean(active) }));
   const messageLock = useRef(new Set());
 
+  // Logging in or out changes `active`. Reset here so a signed-out view does not keep old profiles.
   if (session.active !== active) {
     setSession({ active, loading: Boolean(active) });
   }
@@ -38,10 +51,7 @@ export function useSpotTheLie(active) {
 
   const loading = session.loading;
 
-  const current = profiles.find((profile) => profile.id === pickedId)
-    || profiles.find((profile) => !profile.my_guess)
-    || profiles[0]
-    || null;
+  const current = pickCurrentProfile(profiles, pickedId);
 
   function messageDraft(profile) {
     if (drafts[profile.id] !== undefined) return drafts[profile.id];
@@ -119,7 +129,6 @@ export function useSpotTheLie(active) {
     selected,
     setSelected,
     setPickedId,
-    drafts,
     setDrafts,
     sending,
     sent,

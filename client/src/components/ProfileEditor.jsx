@@ -1,6 +1,7 @@
+// Edit your two truths and a lie. The set locks after someone guesses.
 import { useState } from "react";
 import { api, run } from "../api";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../AuthContext";
 import ErrorNote from "./ErrorNote";
 
 const EMPTY = ["", "", ""];

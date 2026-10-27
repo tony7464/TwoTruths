@@ -1,3 +1,4 @@
+// Turn math: the slam ease, which way each face points, and the shortest spin.
 import gsap from "gsap";
 
 const power3In = gsap.parseEase("power3.in");
@@ -18,7 +19,7 @@ export function slamEase(t) {
 }
 
 // Y rotation that points the named face at a camera sitting on +Z.
-export const FACE_YAW = {
+const FACE_YAW = {
   front: 0,
   right: -Math.PI / 2,
   back: Math.PI,

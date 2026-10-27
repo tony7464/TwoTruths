@@ -1,5 +1,6 @@
+// Flat list of profiles. A tap only highlights a statement; Lock in guess sends it.
 import ErrorNote from "../components/ErrorNote";
-import { useSpotTheLie } from "../components/cube/useSpotTheLie";
+import { useSpotTheLie } from "../components/useSpotTheLie";
 
 export default function BrowsePage() {
   const {

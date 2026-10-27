@@ -1,3 +1,4 @@
+// The cube model plus the HTML panel on each face.
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useContextBridge } from "its-fine";
@@ -37,6 +38,7 @@ function FaceHtml({ Bridge, position, rotation = [0, 0, 0], active, width, heigh
 
   useEffect(() => {
     if (active) return undefined;
+    // 180ms is just longer than the 160ms fade, then the panel is hidden.
     const timer = setTimeout(() => setConcealed(true), 180);
     return () => clearTimeout(timer);
   }, [active]);
@@ -88,14 +90,17 @@ export default function Cube({
   onShowLogin,
   onShowSignup,
 }) {
+  // Face HTML renders outside the canvas. The bridge carries login state with it.
   const Bridge = useContextBridge();
   const { scene } = useCubeModel();
   const [htmlReady, setHtmlReady] = useState(false);
 
   useEffect(() => {
+    // Wait one frame so the panels measure after the canvas exists.
     const id = requestAnimationFrame(() => setHtmlReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
+  // Clone so this view does not move the cached model that useGLTF reuses.
   const cloned = useMemo(() => scene.clone(true), [scene]);
   const nodes = useMemo(() => indexNodes(cloned), [cloned]);
   const camera = useThree((state) => state.camera);

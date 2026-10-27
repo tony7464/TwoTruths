@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+// Cube screen: title, face buttons, and which way the cube should turn.
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../useAuth";
-import ErrorNote from "../ErrorNote";
+import { useAuth } from "../AuthContext";
+import ErrorNote from "../components/ErrorNote";
+import { useSpotTheLie } from "../components/useSpotTheLie";
+import { useCubeAnimations } from "./animations";
 import CubeScene from "./CubeScene";
-import { useCubeAnimations } from "./useCubeAnimations";
-import { useCubeFallback } from "./cubeFallbackContext";
 import { faceToRoute, routeToFace } from "./cubeRoutes";
-import { STAGE_BACKGROUND } from "./cubeStage";
-import { useSpotTheLie } from "./useSpotTheLie";
+import { STAGE_BACKGROUND, useCubeFallback } from "./useCubeMode";
 
 const LOGGED_IN_FACES = [
   { id: "front", label: "Statements" },
@@ -58,20 +58,21 @@ export default function CubeModeApp() {
     userRef.current = user;
   }, [location, user]);
 
-  const followFace = useCallback((face, signedIn = Boolean(userRef.current)) => {
+  function followFace(face, signedIn = Boolean(userRef.current)) {
     const path = faceToRoute(face, signedIn);
     if (locationRef.current.pathname !== path) {
       pendingFace.current = face;
       navigate(path, { replace: true });
     }
-  }, [navigate]);
+  }
 
-  const selectFace = useCallback((face) => {
+  function selectFace(face) {
     followFace(face);
     turnTo(face);
-  }, [turnTo, followFace]);
+  }
 
   useEffect(() => {
+    // A turn we started already updated the URL. Do not snap the cube a second time.
     const face = routeToFace(location.pathname, loggedIn);
     if (pendingFace.current === face) {
       pendingFace.current = null;

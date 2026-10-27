@@ -1,5 +1,6 @@
+// Flat log-in page, shown when the cube view is off.
 import { Link, Navigate } from "react-router-dom";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../AuthContext";
 import { LoginForm } from "../components/AuthForms";
 import FlatModeNote from "../components/FlatModeNote";
 

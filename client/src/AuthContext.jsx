@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+// Who is logged in, plus login, signup, and logout.
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { api, setUnauthorizedHandler } from "./api";
-import AuthContext from "./useAuth";
+
+const AuthContext = createContext(null);
+
+// Same file as AuthProvider so there is one place to read login state.
+// oxlint-disable-next-line react/only-export-components
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
 function userFromSession(data) {
   if (!data || data.user === null) return null;
@@ -10,6 +18,7 @@ function userFromSession(data) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Bumped on login, logout, and a 401 so a slow response cannot overwrite a newer change.
   const epoch = useRef(0);
 
   useEffect(() => {
@@ -70,3 +79,5 @@ export function AuthProvider({ children }) {
     </AuthContext.Provider>
   );
 }
+
+export default AuthContext;

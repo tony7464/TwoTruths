@@ -1,8 +1,35 @@
+// GSAP sequences for cube turns, the wrong-guess shake, and idle eyes.
 import gsap from "gsap";
 import { faceYaw, shortestYaw, slamEase } from "./cubeMath";
 import { clearMoods, setBlink, setEyeMorph } from "./eyes";
 
 const SLAM_SECONDS = 0.7;
+
+function addSadShake(timeline, group, eyes) {
+  const amp = (7 * Math.PI) / 180;
+  const mood = { sad: 1 };
+
+  timeline.call(() => {
+    clearMoods(eyes);
+    setEyeMorph(eyes, "Sad_Disapproval", 1);
+  });
+
+  for (let beat = 0; beat < 4; beat += 1) {
+    let sign = 1;
+    if (beat % 2 === 1) sign = -1;
+    const mag = 1 - beat * 0.22;
+    timeline.to(group.rotation, { z: sign * amp * mag, duration: 0.2, ease: "power1.inOut" });
+    timeline.to(group.position, { x: sign * 0.06 * mag, duration: 0.2, ease: "power1.inOut" }, "<");
+  }
+
+  timeline.to(group.rotation, { z: 0, duration: 0.16, ease: "power2.out" });
+  timeline.to(group.position, { x: 0, duration: 0.16, ease: "power2.out" }, "<");
+  timeline.to(mood, {
+    sad: 0,
+    duration: 0.3,
+    onUpdate: () => setEyeMorph(eyes, "Sad_Disapproval", mood.sad),
+  });
+}
 
 export function settlePose(group) {
   group.rotation.x = 0;
@@ -17,37 +44,18 @@ export function settlePose(group) {
 
 export function createSlamTimeline(group, face) {
   const dest = shortestYaw(group.rotation.y, faceYaw(face));
-  return gsap.timeline({ paused: true }).to(group.rotation, {
+  const timeline = gsap.timeline({ paused: true });
+  timeline.to(group.rotation, {
     y: dest,
     duration: SLAM_SECONDS,
     ease: slamEase,
   });
+  return timeline;
 }
 
 export function createWrongTimeline(group, eyes, onSpinStart) {
   const tl = gsap.timeline({ paused: true });
-  const amp = (7 * Math.PI) / 180;
-  const mood = { sad: 1 };
-
-  tl.call(() => {
-    clearMoods(eyes);
-    setEyeMorph(eyes, "Sad_Disapproval", 1);
-  });
-
-  for (let beat = 0; beat < 4; beat += 1) {
-    const sign = beat % 2 === 0 ? 1 : -1;
-    const mag = 1 - beat * 0.22;
-    tl.to(group.rotation, { z: sign * amp * mag, duration: 0.2, ease: "power1.inOut" });
-    tl.to(group.position, { x: sign * 0.06 * mag, duration: 0.2, ease: "power1.inOut" }, "<");
-  }
-
-  tl.to(group.rotation, { z: 0, duration: 0.16, ease: "power2.out" });
-  tl.to(group.position, { x: 0, duration: 0.16, ease: "power2.out" }, "<");
-  tl.to(mood, {
-    sad: 0,
-    duration: 0.3,
-    onUpdate: () => setEyeMorph(eyes, "Sad_Disapproval", mood.sad),
-  });
+  addSadShake(tl, group, eyes);
 
   // After the shake, slam the short way around to the player list on the left.
   tl.call(() => {
@@ -127,28 +135,7 @@ export function createCorrectTimeline({ group, eyes, camera, opacity, onSpinStar
 
 export function createAuthFailTimeline(group, eyes) {
   const tl = gsap.timeline({ paused: true });
-  const amp = (7 * Math.PI) / 180;
-  const mood = { sad: 1 };
-
-  tl.call(() => {
-    clearMoods(eyes);
-    setEyeMorph(eyes, "Sad_Disapproval", 1);
-  });
-
-  for (let beat = 0; beat < 4; beat += 1) {
-    const sign = beat % 2 === 0 ? 1 : -1;
-    const mag = 1 - beat * 0.22;
-    tl.to(group.rotation, { z: sign * amp * mag, duration: 0.2, ease: "power1.inOut" });
-    tl.to(group.position, { x: sign * 0.06 * mag, duration: 0.2, ease: "power1.inOut" }, "<");
-  }
-
-  tl.to(group.rotation, { z: 0, duration: 0.16, ease: "power2.out" });
-  tl.to(group.position, { x: 0, duration: 0.16, ease: "power2.out" }, "<");
-  tl.to(mood, {
-    sad: 0,
-    duration: 0.3,
-    onUpdate: () => setEyeMorph(eyes, "Sad_Disapproval", mood.sad),
-  });
+  addSadShake(tl, group, eyes);
   tl.call(() => setEyeMorph(eyes, "Sad_Disapproval", 0));
   return tl;
 }

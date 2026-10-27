@@ -1,3 +1,4 @@
+// Flat view for reduced motion, small screens, missing WebGL, load failure, and a saved choice.
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import {
@@ -36,7 +37,6 @@ test("reduced motion forces flat", () => {
   installMedia({ [MOTION_QUERY]: true });
   const { result } = renderHook(() => useCubeMode(false));
   expect(result.current.mode).toBe("flat");
-  expect(result.current.supported).toBe(false);
 });
 
 test("missing WebGL forces flat even if the cube was saved", () => {

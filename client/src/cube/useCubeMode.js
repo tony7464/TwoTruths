@@ -1,4 +1,13 @@
-import { useEffect, useState } from "react";
+// Decides cube vs flat in one place: WebGL, load errors, saved choice, motion, and screen size.
+import { createContext, useContext, useEffect, useState } from "react";
+
+export const STAGE_BACKGROUND = "linear-gradient(180deg, #d7eefb 0%, #e6e2fb 55%, #fbf9ff 100%)";
+
+export const CubeFallbackContext = createContext(null);
+
+export function useCubeFallback() {
+  return useContext(CubeFallbackContext);
+}
 
 export const STORAGE_KEY = "twotruths-cube-view";
 export const OPT_IN_KEY = "twotruths-cube-opt-in";
@@ -8,7 +17,8 @@ export const COARSE_QUERY = "(pointer: coarse)";
 
 const PREFIX = "3D view is off because ";
 
-export function webglAvailable() {
+function webglAvailable() {
+  // A few browsers throw from getContext instead of returning null.
   try {
     const canvas = document.createElement("canvas");
     const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
@@ -23,7 +33,7 @@ function matches(query) {
   return window.matchMedia(query).matches;
 }
 
-export function readEnvironment() {
+function readEnvironment() {
   return {
     reducedMotion: matches(MOTION_QUERY),
     narrow: matches(NARROW_QUERY),
@@ -33,6 +43,7 @@ export function readEnvironment() {
 }
 
 function readKey(key) {
+  // Private browsing can throw when storage is blocked. Treat that as no saved choice.
   try {
     return localStorage.getItem(key);
   } catch {
@@ -40,11 +51,11 @@ function readKey(key) {
   }
 }
 
-export function readStoredView() {
+function readStoredView() {
   return readKey(STORAGE_KEY);
 }
 
-export function readOptIn() {
+function readOptIn() {
   return readKey(OPT_IN_KEY) === "1";
 }
 
@@ -52,7 +63,8 @@ function constrained(input) {
   return Boolean(input.reducedMotion || input.narrow || input.coarse);
 }
 
-export function resolveCubeMode(input) {
+function resolveCubeMode(input) {
+  // No WebGL and a failed load stay flat. A saved "flat" choice wins over opt-in.
   if (!input.webgl || input.loadFailed) return "flat";
   if (input.storedView === "flat") return "flat";
   if (constrained(input) && !input.optIn) return "flat";
@@ -70,7 +82,7 @@ export function flatReasonText(input) {
   return "";
 }
 
-export function canOfferOptIn(input) {
+function canOfferOptIn(input) {
   if (!input.webgl || input.loadFailed || input.storedView === "flat") return false;
   return constrained(input);
 }
@@ -92,7 +104,6 @@ export function useCubeMode(loadFailed = false, loadError = "") {
 
   const input = { ...env, loadFailed, loadError, storedView, optIn };
   const mode = resolveCubeMode(input);
-  const supported = env.webgl && !loadFailed && !constrained(env);
   const reason = mode === "flat" ? flatReasonText(input) : "";
   const offerOptIn = mode === "flat" && canOfferOptIn(input);
   const canChooseCube = mode === "flat" && env.webgl && !loadFailed && storedView === "flat";
@@ -121,7 +132,6 @@ export function useCubeMode(loadFailed = false, loadError = "") {
 
   return {
     mode,
-    supported,
     reason,
     offerOptIn,
     canChooseCube,
