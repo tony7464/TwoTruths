@@ -1,7 +1,16 @@
-"""Replace demo data. From the server folder: python seed.py
+"""Demo data. From the server folder:
 
-Demo login for every seeded user: password123
+    python seed.py
+    python seed.py --if-empty
+    python seed.py --guesses
+
+The first command replaces every account. --if-empty does that only when
+the database has no users, so setup can run twice without wiping data.
+--guesses only clears guesses, messages, and scores. Demo login for every
+seeded user: password123
 """
+
+import sys
 
 from app import app
 from models import Guess, Message, Statement, User, db
@@ -65,6 +74,27 @@ def seed():
     print(f"Seeded {len(PROFILES)} users. Password: {PASSWORD}")
 
 
+def reset_guesses():
+    """Delete every guess and message, and set every score back to 0."""
+    message_count = Message.query.delete()
+    guess_count = Guess.query.delete()
+    User.query.update({User.score: 0})
+    db.session.commit()
+    print(f"Removed {guess_count} guesses and {message_count} messages.")
+
+
+def seed_if_empty():
+    if User.query.first() is not None:
+        print("Demo data is already there, so nothing was replaced.")
+        return
+    seed()
+
+
 if __name__ == "__main__":
     with app.app_context():
-        seed()
+        if "--guesses" in sys.argv[1:]:
+            reset_guesses()
+        elif "--if-empty" in sys.argv[1:]:
+            seed_if_empty()
+        else:
+            seed()

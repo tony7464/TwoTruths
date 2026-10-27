@@ -1,3 +1,5 @@
+"""Database tables: users, statements, guesses, and messages."""
+
 from config import bcrypt, db
 
 
@@ -16,26 +18,6 @@ class User(db.Model):
         back_populates="user",
         cascade="all, delete-orphan",
         order_by="Statement.id",
-    )
-    guesses_made = db.relationship(
-        "Guess",
-        foreign_keys="Guess.guesser_id",
-        back_populates="guesser",
-    )
-    guesses_received = db.relationship(
-        "Guess",
-        foreign_keys="Guess.profile_user_id",
-        back_populates="profile_user",
-    )
-    sent_messages = db.relationship(
-        "Message",
-        foreign_keys="Message.sender_id",
-        back_populates="sender",
-    )
-    received_messages = db.relationship(
-        "Message",
-        foreign_keys="Message.recipient_id",
-        back_populates="recipient",
     )
 
     @property
@@ -73,7 +55,6 @@ class Statement(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     user = db.relationship("User", back_populates="statements")
-    guesses = db.relationship("Guess", back_populates="statement")
 
     def __repr__(self):
         return f"<Statement {self.id} user={self.user_id} lie={self.is_lie}>"
@@ -93,14 +74,6 @@ class Guess(db.Model):
         db.UniqueConstraint("guesser_id", "profile_user_id", name="one_guess_per_profile"),
     )
 
-    guesser = db.relationship("User", foreign_keys=[guesser_id], back_populates="guesses_made")
-    profile_user = db.relationship(
-        "User",
-        foreign_keys=[profile_user_id],
-        back_populates="guesses_received",
-    )
-    statement = db.relationship("Statement", back_populates="guesses")
-
     def __repr__(self):
         return f"<Guess {self.guesser_id} -> {self.profile_user_id} correct={self.is_correct}>"
 
@@ -114,12 +87,8 @@ class Message(db.Model):
     body = db.Column(db.String, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
-    sender = db.relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
-    recipient = db.relationship(
-        "User",
-        foreign_keys=[recipient_id],
-        back_populates="received_messages",
-    )
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    recipient = db.relationship("User", foreign_keys=[recipient_id])
 
     def __repr__(self):
         return f"<Message {self.sender_id} -> {self.recipient_id}>"

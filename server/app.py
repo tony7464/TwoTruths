@@ -1,3 +1,8 @@
+"""API for accounts, statements, guesses, and messages.
+
+A route wrapped with login_required receives the logged-in user as its first argument.
+"""
+
 import re
 from functools import wraps
 
@@ -78,7 +83,13 @@ def own_statement(user, statement_id):
 
 def valid_statement_set(profile):
     statements = profile.statements
-    return len(statements) == 3 and sum(statement.is_lie for statement in statements) == 1
+    if len(statements) != 3:
+        return False
+    lies = 0
+    for statement in statements:
+        if statement.is_lie:
+            lies += 1
+    return lies == 1
 
 
 def thread_is_open(user_a_id, user_b_id):
@@ -256,6 +267,7 @@ def update_statement(user, statement_id):
 
     if "is_lie" in data:
         if data.get("is_lie") is True:
+            # This one becomes the only lie, so the set still has exactly one.
             for other in user.statements:
                 other.is_lie = other.id == statement.id
         elif data.get("is_lie") is False:
@@ -288,6 +300,7 @@ def delete_statements(user):
 @app.delete("/api/statements/<int:statement_id>")
 @login_required
 def delete_statement(user, statement_id):
+    # A single delete is refused so a profile cannot end up with 1 or 2 statements.
     statement, err = own_statement(user, statement_id)
     if statement:
         return error(

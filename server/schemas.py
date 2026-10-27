@@ -1,3 +1,5 @@
+"""Shapes the API returns. Browse responses leave is_lie off so the game still works."""
+
 from marshmallow import fields
 
 from config import ma

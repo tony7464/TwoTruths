@@ -1,3 +1,5 @@
+"""Each test gets its own SQLite file so the dev database is never touched."""
+
 import pytest
 from sqlalchemy import create_engine
 

@@ -1,3 +1,5 @@
+"""Flask app, database, and password hashing. Shared by app.py and the migrations."""
+
 import os
 from pathlib import Path
 
@@ -12,15 +14,27 @@ from sqlalchemy import MetaData
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+SERVER_DIR = Path(__file__).resolve().parent
+INSTANCE_DIR = SERVER_DIR / "instance"
+INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_DATABASE = (INSTANCE_DIR / "app.db").resolve()
+
+
+def default_database_uri():
+    # Absolute path, so seed, migrations, and flask run share one file
+    # no matter which folder the command was started from.
+    return "sqlite:///" + DEFAULT_DATABASE.as_posix()
+
+
 # Names that Flask-Migrate can read. Flatiron lessons use this same map.
 metadata = MetaData(naming_convention={
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
 })
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URI", "sqlite:///app.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URI") or default_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-change-me")
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "dev-only-change-me"
 app.json.compact = False
 
 db = SQLAlchemy(metadata=metadata)
