@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 instance/
 *.db
+node_modules/
 client/node_modules/
 client/dist/
 .DS_Store

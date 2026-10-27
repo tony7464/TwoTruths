@@ -1,0 +1,9 @@
+{
+  "name": "twotruths",
+  "private": true,
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node scripts/start.js",
+    "test": "node scripts/test.js"
+  }
+}
