@@ -1,46 +1,71 @@
 # TwoTruths
 
-Online profiles are bland, and first messages get ignored. TwoTruths is an icebreaker: you post two truths and a lie, other people guess which statement is the lie, and a correct guess unlocks messaging.
+Post two truths and a lie, let other people guess the lie, and unlock a message when they get it right.
+
+## Quick start
+
+```
+Needs: Python 3.10+ and Node 20.19+ or 22.12+.
+npm run setup      # installs everything and creates demo data
+npm start          # runs the API and the website
+Open http://127.0.0.1:5173 and log in with alex / password123
+```
+
+Other demo logins are jordan, sam, and riley, with the same password.
 
 ## Features
 
-- Sign up, log in, and log out with session auth. Passwords are hashed with bcrypt.
-- Write, edit, and delete your three statements. Exactly one must be the lie. The set locks once someone guesses.
-- Browse profiles and guess once per profile. You cannot guess your own.
-- A score counts correct guesses. A "fooled" count tracks wrong guesses against your profile.
-- An inbox where messaging unlocks after a correct guess in either direction.
-
-Statements are created and deleted as a whole set of three (`DELETE /api/statements`). A single-statement delete returns 400.
-
-## 3D cube view
-
-The cube is the whole site. Front is the statements (or the log-in form when signed out), left is the player list, right is the inbox (or sign up), and back is your profile. Top and bottom stay blank. There is no navigation bar in this view: the corner shows the title, and once you are signed in, your name, score, and Log out. Tapping a statement only highlights it; "Lock in guess" sends it. A correct guess celebrates and turns to the inbox. A wrong guess shakes the cube, then turns it to the player list. A bad login shakes the cube. A good login or sign-up nods, then turns to the statements.
-
-The flat pages and the top navigation are only the fallback. That happens when reduced motion is on (unless you opt in), the screen is narrow or the pointer is coarse, WebGL is missing, the cube fails to load, or you choose "Use flat view". A line above the flat content names which of those it is. Reduced motion and narrow or touch screens can press "Show 3D cube anyway"; that choice is saved in the browser. Reduced motion then uses quick turns, without the jump or the shake. Missing WebGL and a failed load stay on the flat pages.
-
-```bash
-cd client && npm test
-cd client && npm run build && npx oxlint
-cd server && pytest
-```
+- Sign up, log in, and log out with session auth. Passwords are hashed.
+- The whole site is a 3D cube. Flat pages are only a fallback.
+- Guess once per profile. You cannot guess your own.
+- A correct guess unlocks messaging between that pair.
+- A score counts correct guesses. A fooled count tracks wrong guesses on your profile.
+- Statements lock after a guess, so the set can no longer be edited or deleted.
 
 ## Screenshots
 
-![Login](docs/screenshots/login.png)
+**Log in face**
 
-![Browse](docs/screenshots/browse.png)
+![Log in face](docs/screenshots/login.png)
 
-![Guess](docs/screenshots/guess.png)
+**Front face with statements and Lock in guess**
 
-![Profile](docs/screenshots/profile.png)
+![Front face with statements and Lock in guess](docs/screenshots/front.png)
 
-![Inbox](docs/screenshots/inbox.png)
+**Correct guess**
 
-TODO: add a screenshot of the 3D cube view.
+![Correct guess](docs/screenshots/correct-guess.png)
+
+**Inbox face**
+
+![Inbox face](docs/screenshots/inbox.png)
+
+**Players face**
+
+![Players face](docs/screenshots/players.png)
+
+**Profile face**
+
+![Profile face](docs/screenshots/profile.png)
+
+**Wrong guess**
+
+![Wrong guess](docs/screenshots/wrong-guess.png)
+
+## How the game works
+
+1. You post two truths and a lie.
+2. Others pick the lie and press Lock in guess.
+3. Each person gets one guess per profile.
+4. A correct guess scores a point, spins the cube to your inbox, and unlocks messaging in that pair.
+5. A wrong guess shakes the cube and spins it to the player list. Messaging stays closed, and that profile's fooled count goes up.
+6. Statements lock once anyone has guessed.
+7. Cube faces: Front is statements, Left is players, Right is inbox, and Back is your profile.
 
 ## Tech stack
 
-Flask, SQLAlchemy, Flask-Migrate, Marshmallow, and Flask-Bcrypt on the server, with SQLite. React, Vite, React Router, and Tailwind on the client.
+Flask, SQLAlchemy, Flask-Migrate, Marshmallow, and Flask-Bcrypt on the server, with SQLite.
+React, Vite, React Router, and Tailwind on the client.
 
 ## Data model
 
@@ -49,52 +74,40 @@ Flask, SQLAlchemy, Flask-Migrate, Marshmallow, and Flask-Bcrypt on the server, w
 - **Guess** — guesser pointing at a profile user, and the statement they picked. Also the user-to-user many-to-many join, unique per pair.
 - **Message** — sender pointing at a recipient.
 
-## Setup
+## Code layout
 
-Copy the environment file:
-
-```bash
-cp .env.example .env
+```
+package.json         npm run setup, npm start, and npm test
+scripts/             setup.js, start.js, test.js, and common.js
+client/src/
+  main.jsx           starts React
+  App.jsx            flat routes, and the switch to the cube
+  api.js             calls the Flask API
+  AuthContext.jsx    who is logged in
+  pages/             Login, Signup, Browse, Inbox
+  components/        nav, forms, profile editor, inbox, shared hooks
+  cube/              the 3D cube, its animations, and the flat-view decision
+server/
+  app.py             API routes
+  models.py          database tables
+  schemas.py         JSON shapes
+  config.py          Flask setup
+  seed.py            demo accounts, --if-empty, or --guesses
+  tests/             the game rules
 ```
 
-Start the API (port 5555):
+## Running tests
 
-```bash
-cd server && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && flask db upgrade && python seed.py && flask run
-```
+From the repo root, `npm test` runs the server tests and the client tests.
 
-In a second terminal, start the client, then open http://localhost:5173:
+Server only, from `server/`: `.venv/bin/python -m pytest` (Windows: `.venv\Scripts\python -m pytest`).
 
-```bash
-cd client && npm install && npm run dev
-```
+Client only, from `client/`: `npx vitest run`. The same folder also has `npm run build` and `npx oxlint`.
 
-Demo logins: alex, jordan, sam, and riley, all with password `password123`.
+## Troubleshooting
 
-Run the tests:
-
-```bash
-cd server && pytest
-```
-
-## API
-
-Routes below are the ones defined in `server/app.py`. Auth means a logged-in session.
-
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/signup` | No | Create an account and start a session. |
-| POST | `/api/login` | No | Log in and start a session. |
-| DELETE | `/api/logout` | No | End the current session. |
-| GET | `/api/check_session` | No | Return the logged-in user, or `{"user": null}` when logged out. |
-| GET | `/api/users` | Yes | List other profiles that are ready to guess. |
-| GET | `/api/statements` | Yes | List your statements, including which one is the lie. |
-| POST | `/api/statements` | Yes | Create your set of three statements. |
-| PATCH | `/api/statements/<id>` | Yes | Edit one of your statements, unless the set is locked. |
-| DELETE | `/api/statements/<id>` | Yes | Refuse a single delete; a profile needs exactly three statements. |
-| DELETE | `/api/statements` | Yes | Delete your whole set, unless someone has already guessed. |
-| POST | `/api/guesses` | Yes | Guess once which statement on a profile is the lie. |
-| GET | `/api/messages` | Yes | List messages you sent or received. |
-| POST | `/api/messages` | Yes | Send a message after a correct guess in either direction. |
-
-Author: Jose Rayos
+- A flat page instead of the cube means Reduce motion is on, the window is narrower than 640px, the screen is a touch screen, WebGL or hardware acceleration is off, or a flat choice was saved; use "Show 3D cube anyway" or the "Use 3D view" option ("Use 3D cube").
+- If port 5555 or 5173 is already in use, stop that program and run `npm start` again (macOS or Linux: `lsof -i :5555`, Windows: `netstat -ano | findstr :5555`).
+- If setup says Python or Node is missing or too old, install Python 3.10+ and Node.js 20.19+ or 22.12+, then run `npm run setup` again.
+- To reset the demo data, `cd server` and run `.venv/bin/python seed.py` (Windows: `.venv\Scripts\python seed.py`).
+- To reset only guesses, messages, and scores, run that same command with `--guesses` (`seed.py --guesses`).
