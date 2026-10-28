@@ -1,10 +1,24 @@
 """Each test gets its own SQLite file so the dev database is never touched."""
 
+import os
+
 import pytest
 from sqlalchemy import create_engine
 
+# config.py reads SECRET_KEY while it is imported and will not start without one
+# unless FLASK_DEBUG is on. Set a test key before that import.
+os.environ.setdefault("SECRET_KEY", "test-only-secret")
+
 from app import app
 from config import db
+from limiter import reset_login_limiter
+
+
+@pytest.fixture(autouse=True)
+def clean_login_limiter():
+    reset_login_limiter()
+    yield
+    reset_login_limiter()
 
 
 @pytest.fixture

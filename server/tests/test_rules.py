@@ -131,7 +131,7 @@ def test_logout_clears_the_session_and_other_routes_stay_protected(client):
     assert client.post("/api/statements", json={}).status_code == 401
     assert client.patch("/api/statements/1", json={}).status_code == 401
     assert client.delete("/api/statements").status_code == 401
-    assert client.delete("/api/statements/1").status_code == 401
+    assert client.delete("/api/statements/1").status_code == 405
     assert client.get("/api/messages").status_code == 401
     assert client.post("/api/messages", json={}).status_code == 401
     assert client.post("/api/guesses", json={}).status_code == 401
@@ -192,10 +192,19 @@ def test_only_the_owner_can_edit_or_delete(client, other):
     deleted = other.delete(f"/api/statements/{statement_id}")
 
     assert edited.status_code == 404
-    assert deleted.status_code == 404
+    assert deleted.status_code == 405
+    assert "error" in deleted.get_json()
 
     still_there = client.get("/api/statements").get_json()
     assert len(still_there) == 3
+
+
+def test_deleting_one_statement_is_not_allowed(client):
+    sign_up(client, "casey")
+    created = add_statements(client)
+    response = client.delete(f"/api/statements/{created[0]['id']}")
+    assert response.status_code == 405
+    assert "error" in response.get_json()
 
 
 def test_delete_the_whole_set_then_write_a_new_one(client):
@@ -244,7 +253,8 @@ def test_statements_lock_after_a_guess(client, other):
     removed = client.delete(f"/api/statements/{created[0]['id']}")
 
     assert locked.status_code == 403
-    assert removed.status_code == 403
+    assert removed.status_code == 405
+    assert "error" in removed.get_json()
 
 
 def test_wrong_guess_is_final_and_blocks_messaging(client, other):

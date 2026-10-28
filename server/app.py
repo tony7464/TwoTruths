@@ -8,9 +8,29 @@ from functools import wraps
 
 from flask import request, session
 from sqlalchemy.exc import IntegrityError
+from werkzeug.exceptions import RequestEntityTooLarge
 
-from config import app, db
-from models import Guess, Message, Statement, User
+from client_files import register_client_files
+from config import app, db, debug_enabled
+from errors import error, register_error_handlers
+from game import (
+    guess_for_viewer,
+    locked_response,
+    own_statement,
+    revealed_guess,
+    thread_is_open,
+    user_by_name,
+    valid_statement_set,
+    validate_statement_set,
+)
+from limiter import (
+    clear_login_failures,
+    login_blocked,
+    record_login_failure,
+    record_signup_attempt,
+    signup_blocked,
+)
+from models import Guess, Message, Statement, User, remove_user
 from schemas import (
     messages_schema,
     owner_statement_schema,
@@ -18,16 +38,20 @@ from schemas import (
     owner_user_schema,
     public_user_schema,
 )
+from validation import (
+    MAX_BIO,
+    MAX_MESSAGE,
+    MAX_STATEMENT,
+    MIN_PASSWORD,
+    USERNAME_PATTERN,
+    clean_bio,
+    clean_text,
+    is_valid_text,
+    parse_int,
+    password_error,
+)
 
-USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,20}")
-MIN_PASSWORD = 6
-MAX_BIO = 160
-MAX_STATEMENT = 200
-MAX_MESSAGE = 500
-
-
-def error(message, status):
-    return {"error": message}, status
+register_error_handlers()
 
 
 def current_user():
@@ -48,118 +72,92 @@ def login_required(view):
     return wrapped
 
 
-def clean_text(value, limit):
-    text = (value or "").strip()
-    if not text:
-        return None, "This field needs text."
-    if len(text) > limit:
-        return None, f"Keep it under {limit} characters."
-    return text, None
+def _cache_chunked_body():
+    # No Content-Length (chunked). Werkzeug stops at the cap without raising,
+    # so a too-large body would look like bad JSON. Read one byte past the cap
+    # and let the 413 handler answer.
+    limit = request.max_content_length
+    if limit is None or request.content_length is not None:
+        return
+    if not request.environ.get("wsgi.input_terminated"):
+        return
+    stream = request.environ["wsgi.input"]
+    chunks = []
+    remaining = limit + 1
+    while remaining > 0:
+        chunk = stream.read(remaining)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    raw = b"".join(chunks)
+    if len(raw) > limit:
+        raise RequestEntityTooLarge()
+    request._cached_data = raw
 
 
-def parse_int(value):
+def json_body():
     try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+        _cache_chunked_body()
+        data = request.get_json(silent=True)
+    except RequestEntityTooLarge:
+        raise
+    except (RecursionError, ValueError):
+        return None, error("Send a JSON object.", 400)
+    if not isinstance(data, dict):
+        return None, error("Send a JSON object.", 400)
+    return data, None
 
 
-def locked_response(user):
-    # A guess locks the set. Later edits would rewrite results people already saw.
-    if user.statements_locked:
-        return error("Your statements are locked because someone has guessed.", 403)
-    return None
-
-
-def own_statement(user, statement_id):
-    statement = db.session.get(Statement, statement_id)
-    if not statement or statement.user_id != user.id:
-        return None, error("Statement not found.", 404)
-    locked = locked_response(user)
-    if locked:
-        return None, locked
-    return statement, None
-
-
-def valid_statement_set(profile):
-    statements = profile.statements
-    if len(statements) != 3:
-        return False
-    lies = 0
-    for statement in statements:
-        if statement.is_lie:
-            lies += 1
-    return lies == 1
-
-
-def thread_is_open(user_a_id, user_b_id):
-    # One correct guess, in either direction, opens messaging for both people.
-    return Guess.query.filter(
-        Guess.is_correct.is_(True),
-        db.or_(
-            db.and_(Guess.guesser_id == user_a_id, Guess.profile_user_id == user_b_id),
-            db.and_(Guess.guesser_id == user_b_id, Guess.profile_user_id == user_a_id),
-        ),
-    ).first() is not None
-
-
-def revealed_guess(guess, profile):
-    lie = next(statement for statement in profile.statements if statement.is_lie)
-    return {
-        "is_correct": guess.is_correct,
-        "statement_id": guess.statement_id,
-        "messaging_unlocked": guess.is_correct,
-        "lie": {"id": lie.id, "content": lie.content},
-    }
-
-
-def guess_for_viewer(viewer, profile):
-    # Until this viewer guesses, the lie stays hidden. Then they see the lie they faced.
-    guess = Guess.query.filter_by(guesser_id=viewer.id, profile_user_id=profile.id).first()
-    if not guess:
-        return None
-    return revealed_guess(guess, profile)
-
-
-def validate_statement_set(items):
-    # Saved as a whole set: exactly three statements, exactly one of them the lie.
-    if not isinstance(items, list) or len(items) != 3:
-        return "Send exactly 3 statements."
-
-    lie_count = 0
-    for item in items:
-        if not isinstance(item, dict):
-            return "Each statement needs text and a lie flag."
-        text, problem = clean_text(item.get("content"), MAX_STATEMENT)
-        if problem:
-            return "Every statement needs text under 200 characters."
-        item["content"] = text
-        if item.get("is_lie") is True:
-            lie_count += 1
-        elif item.get("is_lie") is not False:
-            return "Mark each statement as a truth or the lie."
-
-    if lie_count != 1:
-        return "Mark exactly one statement as the lie."
-    return None
+@app.before_request
+def reject_oversized_url_id():
+    # Any method. A digit string SQLite cannot store must be 404, not a 500 or a 405.
+    # Only ASCII digits: "²" and "١٢٣" pass str.isdigit() but are not int() values.
+    # int() itself errors past 4300 digits, so a longer digit string is 404 first.
+    for part in request.path.split("/"):
+        if not re.fullmatch(r"[0-9]+", part):
+            continue
+        if len(part) > 19 or parse_int(int(part)) is None:
+            return error("Not found.", 404)
 
 
 # --- auth ---
 
 @app.post("/api/signup")
 def signup():
-    data = request.get_json() or {}
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-    bio = (data.get("bio") or "").strip()
+    data, err = json_body()
+    if err:
+        return err
 
+    blocked = signup_blocked()
+    if blocked:
+        return blocked
+    # Every call counts, including ones that fail validation.
+    record_signup_attempt()
+
+    username = data.get("username")
+    password = data.get("password")
+    if not isinstance(username, str):
+        return error("Username must be text.", 400)
+    problem = password_error(password)
+    if problem:
+        return error(problem, 400)
+    if "bio" in data and not isinstance(data.get("bio"), str):
+        return error("Bio must be text.", 400)
+
+    username = username.strip()
+    bio = data["bio"].strip() if isinstance(data.get("bio"), str) else ""
+    if not is_valid_text(bio):
+        return error("Bio must be text.", 400)
+    if not is_valid_text(username):
+        return error("Username must be text.", 400)
     if not USERNAME_PATTERN.fullmatch(username):
         return error("Username must be 3–20 letters, numbers, or underscores.", 400)
     if len(password) < MIN_PASSWORD:
         return error("Password must be at least 6 characters.", 400)
     if len(bio) > MAX_BIO:
         return error(f"Bio must be under {MAX_BIO} characters.", 400)
-    if User.query.filter_by(username=username).first():
+    if user_by_name(username):
         return error("That username is taken.", 409)
 
     user = User(username=username, bio=bio)
@@ -171,20 +169,40 @@ def signup():
         db.session.rollback()
         return error("That username is taken.", 409)
 
+    session.clear()
     session["user_id"] = user.id
     return owner_user_schema.dump(user), 201
 
 
 @app.post("/api/login")
 def login():
-    data = request.get_json() or {}
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-    user = User.query.filter_by(username=username).first()
+    data, err = json_body()
+    if err:
+        return err
 
+    username = data.get("username")
+    password = data.get("password")
+    if not isinstance(username, str):
+        return error("Username must be text.", 400)
+    problem = password_error(password)
+    if problem:
+        return error(problem, 400)
+
+    username = username.strip()
+    # The limiter key lowercases the name. Reject a lone surrogate before that.
+    if not is_valid_text(username):
+        return error("Username must be text.", 400)
+    blocked = login_blocked(username)
+    if blocked:
+        return blocked
+
+    user = user_by_name(username)
     if not user or not user.authenticate(password):
+        record_login_failure(username)
         return error("Username or password is incorrect.", 401)
 
+    clear_login_failures(username)
+    session.clear()
     session["user_id"] = user.id
     return owner_user_schema.dump(user)
 
@@ -205,6 +223,11 @@ def check_session():
     return owner_user_schema.dump(user)
 
 
+@app.get("/api/health")
+def health():
+    return {"ok": True}
+
+
 # --- profiles ---
 
 @app.get("/api/users")
@@ -221,6 +244,44 @@ def list_users(user):
     return results
 
 
+@app.patch("/api/profile")
+@login_required
+def update_profile(user):
+    data, err = json_body()
+    if err:
+        return err
+    text, problem = clean_bio(data.get("bio"))
+    if problem:
+        return error(problem, 400)
+    user.bio = text
+    db.session.commit()
+    return owner_user_schema.dump(user)
+
+
+@app.delete("/api/account")
+@login_required
+def delete_account(user):
+    data, err = json_body()
+    if err:
+        return err
+    password = data.get("password")
+    problem = password_error(password)
+    if problem:
+        return error(problem, 400)
+
+    blocked = login_blocked(user.username)
+    if blocked:
+        return blocked
+    if not user.authenticate(password):
+        record_login_failure(user.username)
+        return error("Password is incorrect.", 401)
+
+    remove_user(user)
+    db.session.commit()
+    session.clear()
+    return {"message": "Account deleted."}
+
+
 # --- statements ---
 
 @app.get("/api/statements")
@@ -235,7 +296,10 @@ def create_statements(user):
     if user.statements:
         return error("You already have statements. Edit them instead.", 400)
 
-    items = (request.get_json() or {}).get("statements")
+    data, err = json_body()
+    if err:
+        return err
+    items = data.get("statements")
     problem = validate_statement_set(items)
     if problem:
         return error(problem, 400)
@@ -253,11 +317,17 @@ def create_statements(user):
 @app.patch("/api/statements/<int:statement_id>")
 @login_required
 def update_statement(user, statement_id):
+    data, err = json_body()
+    if err:
+        return err
+    if "content" in data and not isinstance(data.get("content"), str):
+        return error("Statement text is required and must be under 200 characters.", 400)
+    if "is_lie" in data and not isinstance(data.get("is_lie"), bool):
+        return error("is_lie must be true or false.", 400)
+
     statement, err = own_statement(user, statement_id)
     if err:
         return err
-
-    data = request.get_json() or {}
 
     if "content" in data:
         text, problem = clean_text(data.get("content"), MAX_STATEMENT)
@@ -297,25 +367,14 @@ def delete_statements(user):
     return {"message": "Statements deleted."}
 
 
-@app.delete("/api/statements/<int:statement_id>")
-@login_required
-def delete_statement(user, statement_id):
-    # A single delete is refused so a profile cannot end up with 1 or 2 statements.
-    statement, err = own_statement(user, statement_id)
-    if statement:
-        return error(
-            "Delete your whole set and write a new one; a profile needs exactly 3 statements.",
-            400,
-        )
-    return err
-
-
 # --- guesses ---
 
 @app.post("/api/guesses")
 @login_required
 def create_guess(user):
-    data = request.get_json() or {}
+    data, err = json_body()
+    if err:
+        return err
     profile_user_id = parse_int(data.get("profile_user_id"))
     statement_id = parse_int(data.get("statement_id"))
     if profile_user_id is None or statement_id is None:
@@ -374,7 +433,14 @@ def list_messages(user):
 @app.post("/api/messages")
 @login_required
 def create_message(user):
-    data = request.get_json() or {}
+    data, err = json_body()
+    if err:
+        return err
+
+    body, problem = clean_text(data.get("body"), MAX_MESSAGE)
+    if problem:
+        return error("Message text is required and must be under 500 characters.", 400)
+
     recipient_id = parse_int(data.get("recipient_id"))
     if recipient_id is None:
         return error("Choose who should receive this message.", 400)
@@ -387,15 +453,14 @@ def create_message(user):
     if not thread_is_open(user.id, recipient.id):
         return error("Guess their lie correctly before messaging.", 403)
 
-    body, problem = clean_text(data.get("body"), MAX_MESSAGE)
-    if problem:
-        return error("Message text is required and must be under 500 characters.", 400)
-
     message = Message(sender=user, recipient=recipient, body=body)
     db.session.add(message)
     db.session.commit()
     return messages_schema.dump([message])[0], 201
 
 
+register_client_files(app)
+
+
 if __name__ == "__main__":
-    app.run(port=5555, debug=True)
+    app.run(port=5555, debug=debug_enabled())

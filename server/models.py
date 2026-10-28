@@ -13,6 +13,11 @@ class User(db.Model):
     score = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
+    # "Alex" and "alex" cannot both exist. The column still stores the typed case.
+    __table_args__ = (
+        db.Index("uq_users_username_lower", db.func.lower(username), unique=True),
+    )
+
     statements = db.relationship(
         "Statement",
         back_populates="user",
@@ -92,3 +97,34 @@ class Message(db.Model):
 
     def __repr__(self):
         return f"<Message {self.sender_id} -> {self.recipient_id}>"
+
+
+def remove_user(user):
+    """Delete this account and every row that points at it.
+
+    Score is stored on the guesser. A correct guess at this profile is about
+    to disappear, so that guesser's score is counted again from what remains.
+    """
+    user_id = user.id
+    guesses = Guess.query.filter(
+        db.or_(Guess.guesser_id == user_id, Guess.profile_user_id == user_id)
+    ).all()
+    messages = Message.query.filter(
+        db.or_(Message.sender_id == user_id, Message.recipient_id == user_id)
+    ).all()
+    affected = {guess.guesser_id for guess in guesses if guess.guesser_id != user_id}
+
+    for message in messages:
+        db.session.delete(message)
+    for guess in guesses:
+        db.session.delete(guess)
+    db.session.flush()
+
+    for guesser_id in affected:
+        guesser = db.session.get(User, guesser_id)
+        if guesser is None:
+            continue
+        guesser.score = Guess.query.filter_by(guesser_id=guesser_id, is_correct=True).count()
+
+    # Statements follow the user through the relationship cascade.
+    db.session.delete(user)
