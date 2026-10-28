@@ -5,11 +5,12 @@ export function setUnauthorizedHandler(handler) {
   onUnauthorized = handler;
 }
 
-export async function api(path, method = "GET", body) {
+export async function api(path, method = "GET", body, signal) {
   const options = {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     method,
+    signal,
   };
   if (body !== undefined) {
     options.body = JSON.stringify(body);
@@ -19,7 +20,12 @@ export async function api(path, method = "GET", body) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
 
-  if (response.status === 401) {
+  // A wrong password on account delete is also 401. Only a missing session
+  // should clear the logged-in user, so the form can show the password error.
+  const wrongAccountPassword = path === "/api/account"
+    && method === "DELETE"
+    && data?.error === "Password is incorrect.";
+  if (response.status === 401 && !wrongAccountPassword) {
     onUnauthorized();
   }
 

@@ -1,12 +1,14 @@
 // Finished animations land on the right face and clear the eye mood.
 import { expect, test } from "vitest";
 import {
+  addSlam,
   createAuthFailTimeline,
   createAuthSuccessTimeline,
   createCorrectTimeline,
   createQuickTurnTimeline,
   createSlamTimeline,
   createWrongTimeline,
+  setMood,
 } from "./timelines";
 
 function makeGroup(yaw = 0) {
@@ -31,6 +33,31 @@ function makeEye() {
     morphTargetInfluences: [0, 0, 0, 0, 0, 0, 0],
   };
 }
+
+test("setMood turns on one eye shape and clears the others", () => {
+  const eyes = [makeEye(), makeEye()];
+  eyes[0].morphTargetInfluences[2] = 1;
+  setMood(eyes, "Happy");
+  expect(eyes[0].morphTargetInfluences[1]).toBe(1);
+  expect(eyes[0].morphTargetInfluences[2]).toBe(0);
+  expect(eyes[1].morphTargetInfluences[1]).toBe(1);
+});
+
+test("addSlam aims the group the short way around", () => {
+  const group = makeGroup(0);
+  const calls = [];
+  const timeline = {
+    to(target, vars) {
+      calls.push({ target, vars });
+      return this;
+    },
+  };
+  addSlam(timeline, group, "left");
+  expect(calls).toHaveLength(1);
+  expect(calls[0].target).toBe(group.rotation);
+  expect(calls[0].vars.y()).toBeCloseTo(Math.PI / 2);
+  expect(calls[0].vars.duration).toBe(0.7);
+});
 
 test("slam to the left face uses the short turn", () => {
   const group = makeGroup(0);

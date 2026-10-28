@@ -5,13 +5,25 @@ import { clearMoods, setBlink, setEyeMorph } from "./eyes";
 
 const SLAM_SECONDS = 0.7;
 
+export function setMood(eyes, name) {
+  clearMoods(eyes);
+  setEyeMorph(eyes, name, 1);
+}
+
+export function addSlam(tl, group, face, duration = SLAM_SECONDS, ease = slamEase) {
+  tl.to(group.rotation, {
+    y: () => shortestYaw(group.rotation.y, faceYaw(face)),
+    duration,
+    ease,
+  });
+}
+
 function addSadShake(timeline, group, eyes) {
   const amp = (7 * Math.PI) / 180;
   const mood = { sad: 1 };
 
   timeline.call(() => {
-    clearMoods(eyes);
-    setEyeMorph(eyes, "Sad_Disapproval", 1);
+    setMood(eyes, "Sad_Disapproval");
   });
 
   for (let beat = 0; beat < 4; beat += 1) {
@@ -62,11 +74,7 @@ export function createWrongTimeline(group, eyes, onSpinStart) {
     setEyeMorph(eyes, "Sad_Disapproval", 0);
     onSpinStart?.();
   });
-  tl.to(group.rotation, {
-    y: () => shortestYaw(group.rotation.y, faceYaw("left")),
-    duration: SLAM_SECONDS,
-    ease: slamEase,
-  });
+  addSlam(tl, group, "left");
 
   return tl;
 }
@@ -77,17 +85,11 @@ export function createCorrectTimeline({ group, eyes, camera, opacity, onSpinStar
 
   tl.to(group.scale, { y: 0.92, x: 1.04, z: 1.04, duration: 0.16, ease: "power2.in" });
 
-  tl.call(() => {
-    clearMoods(eyes);
-    setEyeMorph(eyes, "Surprised", 1);
-  });
+  tl.call(() => setMood(eyes, "Surprised"));
   tl.to(group.position, { y: 0.6, duration: 0.24, ease: "power2.out" });
   tl.to(group.scale, { y: 1.14, x: 0.94, z: 0.94, duration: 0.24, ease: "power2.out" }, "<");
 
-  tl.call(() => {
-    clearMoods(eyes);
-    setEyeMorph(eyes, "Happy", 1);
-  });
+  tl.call(() => setMood(eyes, "Happy"));
   tl.to(group.rotation, { x: 0.25, duration: 0.13, ease: "power1.inOut" });
   tl.to(group.rotation, { x: 0, duration: 0.13, ease: "power1.inOut" });
   tl.to(group.rotation, { x: 0.25, duration: 0.13, ease: "power1.inOut" });
@@ -100,11 +102,7 @@ export function createCorrectTimeline({ group, eyes, camera, opacity, onSpinStar
 
   // 90° slam onto the inbox (right face). From the front this lands on -PI/2.
   tl.call(() => onSpinStart?.());
-  tl.to(group.rotation, {
-    y: () => shortestYaw(group.rotation.y, faceYaw("right")),
-    duration: SLAM_SECONDS,
-    ease: slamEase,
-  });
+  addSlam(tl, group, "right");
   tl.call(() => onSpinEnd?.());
 
   const kicks = [0.05, -0.035, 0.02, -0.01, 0];
@@ -143,10 +141,7 @@ export function createAuthFailTimeline(group, eyes) {
 export function createAuthSuccessTimeline(group, eyes, onSpinStart) {
   const tl = gsap.timeline({ paused: true });
 
-  tl.call(() => {
-    clearMoods(eyes);
-    setEyeMorph(eyes, "Happy", 1);
-  });
+  tl.call(() => setMood(eyes, "Happy"));
   tl.to(group.scale, { y: 0.94, x: 1.03, z: 1.03, duration: 0.12, ease: "power2.in" });
   tl.to(group.position, { y: 0.35, duration: 0.18, ease: "power2.out" });
   tl.to(group.scale, { y: 1.08, x: 0.96, z: 0.96, duration: 0.18, ease: "power2.out" }, "<");
@@ -156,11 +151,7 @@ export function createAuthSuccessTimeline(group, eyes, onSpinStart) {
   tl.to(group.scale, { x: 1, y: 1, z: 1, duration: 0.14, ease: "power2.out" }, "<");
   tl.set(group.rotation, { x: 0, z: 0 });
   tl.call(() => onSpinStart?.());
-  tl.to(group.rotation, {
-    y: () => shortestYaw(group.rotation.y, faceYaw("front")),
-    duration: SLAM_SECONDS,
-    ease: slamEase,
-  });
+  addSlam(tl, group, "front");
   tl.call(() => clearMoods(eyes));
   return tl;
 }
@@ -169,14 +160,10 @@ export function createAuthSuccessTimeline(group, eyes, onSpinStart) {
 export function createQuickTurnTimeline(group, face, eyes, mood) {
   const tl = gsap.timeline({ paused: true });
   tl.call(() => {
-    clearMoods(eyes);
-    if (mood) setEyeMorph(eyes, mood, 1);
+    if (mood) setMood(eyes, mood);
+    else clearMoods(eyes);
   });
-  tl.to(group.rotation, {
-    y: () => shortestYaw(group.rotation.y, faceYaw(face)),
-    duration: 0.22,
-    ease: "power2.inOut",
-  });
+  addSlam(tl, group, face, 0.22, "power2.inOut");
   tl.call(() => clearMoods(eyes));
   return tl;
 }

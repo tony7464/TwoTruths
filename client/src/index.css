@@ -1,2 +1,10 @@
 /* Tailwind. Component files hold the rest of the styling. */
 @import "tailwindcss";
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #047857;
+  outline-offset: 2px;
+}

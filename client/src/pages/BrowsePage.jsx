@@ -1,5 +1,6 @@
 // Flat list of profiles. A tap only highlights a statement; Lock in guess sends it.
 import ErrorNote from "../components/ErrorNote";
+import FirstMessageForm from "../components/FirstMessageForm";
 import { useSpotTheLie } from "../components/useSpotTheLie";
 
 export default function BrowsePage() {
@@ -88,6 +89,7 @@ function ProfileCard({
               <button
                 type="button"
                 disabled={Boolean(guess)}
+                aria-pressed={chosen}
                 onClick={() => onSelect(statement.id)}
                 className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
                   chosen && !guess ? "border-emerald-700 bg-emerald-50" : "border-stone-200"
@@ -119,35 +121,14 @@ function ProfileCard({
       )}
 
       {guess?.messaging_unlocked && (
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSend();
-          }}
-        >
-          <p className="text-sm font-medium text-emerald-800">Correct. Send the first message.</p>
-          {sent ? (
-            <p className="text-sm text-stone-600">Sent. It is in your inbox.</p>
-          ) : (
-            <>
-              <textarea
-                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm disabled:opacity-60"
-                rows="2"
-                value={message}
-                disabled={sending}
-                onChange={(event) => onMessageChange(event.target.value)}
-              />
-              <button
-                type="submit"
-                disabled={sending}
-                className="rounded-md bg-stone-900 px-3 py-2 text-sm text-white disabled:opacity-60"
-              >
-                Send
-              </button>
-            </>
-          )}
-        </form>
+        <FirstMessageForm
+          username={profile.username}
+          message={message}
+          sending={sending}
+          sent={sent}
+          onMessageChange={onMessageChange}
+          onSend={onSend}
+        />
       )}
     </article>
   );

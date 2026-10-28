@@ -6,7 +6,7 @@ import FlatModeNote from "./components/FlatModeNote";
 import NavBar from "./components/NavBar";
 import ProfileEditor from "./components/ProfileEditor";
 import CubeErrorBoundary from "./cube/CubeErrorBoundary";
-import { CubeFallbackContext, STAGE_BACKGROUND, useCubeMode } from "./cube/useCubeMode";
+import { CubeFallbackContext, STAGE_BACKGROUND, useCubeMode, useDeferredCanvas } from "./cube/useCubeMode";
 import BrowsePage from "./pages/BrowsePage";
 import InboxPage from "./pages/InboxPage";
 import LoginPage from "./pages/LoginPage";
@@ -64,6 +64,7 @@ function ModeSwitch() {
   const { loading } = useAuth();
   const [loadError, setLoadError] = useState("");
   const cube = useCubeMode(Boolean(loadError), loadError);
+  const canvasMounted = useDeferredCanvas(cube.mode === "cube");
 
   if (loading) {
     return <p className="p-8 text-center text-stone-600">Loading...</p>;
@@ -71,7 +72,7 @@ function ModeSwitch() {
 
   return (
     <CubeFallbackContext.Provider value={cube}>
-      {cube.mode === "cube" ? (
+      {canvasMounted ? (
         <CubeErrorBoundary onError={(error) => setLoadError(error?.message || "unknown error")}>
           <Suspense fallback={<CubeLoading />}>
             <CubeModeApp />

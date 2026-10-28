@@ -1,14 +1,18 @@
 // Flat view for reduced motion, small screens, missing WebGL, load failure, and a saved choice.
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   COARSE_QUERY,
+  CONTEXT_LOST_REASON,
   MOTION_QUERY,
   NARROW_QUERY,
   OPT_IN_KEY,
   STORAGE_KEY,
+  bindContextLoss,
   flatReasonText,
   useCubeMode,
+  useDeferredCanvas,
+  useHtmlReady,
 } from "./useCubeMode";
 
 function installMedia(matches) {
@@ -29,6 +33,7 @@ function installWebGL(available) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   localStorage.clear();
 });
 
@@ -142,6 +147,95 @@ test("choosing flat wins over an earlier opt-in", () => {
   expect(result.current.offerOptIn).toBe(false);
 });
 
+test("a lost graphics context falls back to flat", () => {
+  installWebGL(true);
+  installMedia({});
+  const { result } = renderHook(() => useCubeMode(false));
+  expect(result.current.mode).toBe("cube");
+  act(() => result.current.reportContextLost());
+  expect(result.current.mode).toBe("flat");
+  expect(result.current.reason).toBe(CONTEXT_LOST_REASON);
+  expect(result.current.offerOptIn).toBe(false);
+  expect(result.current.canChooseCube).toBe(false);
+});
+
+test("the context-lost handler asks for the flat view and then unsubscribes", () => {
+  const canvas = document.createElement("canvas");
+  const reasons = [];
+  const stop = bindContextLoss(canvas, (reason) => reasons.push(reason));
+  const event = new Event("webglcontextlost", { cancelable: true });
+  canvas.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  expect(reasons).toEqual([CONTEXT_LOST_REASON]);
+  stop();
+  canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+  expect(reasons).toEqual([CONTEXT_LOST_REASON]);
+});
+
+test("face html turns off before the flat fallback", () => {
+  const queued = [];
+  let nextId = 0;
+  vi.stubGlobal("requestAnimationFrame", (callback) => {
+    nextId += 1;
+    queued[nextId] = callback;
+    return nextId;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (frameId) => {
+    queued[frameId] = null;
+  });
+  installWebGL(true);
+  installMedia({});
+  const canvas = document.createElement("canvas");
+
+  function Gate({ report }) {
+    const htmlReady = useHtmlReady(canvas, report);
+    return <span>{htmlReady ? "html on" : "html off"}</span>;
+  }
+
+  function Harness({ showGate }) {
+    const cube = useCubeMode(false);
+    return (
+      <div>
+        <span>{cube.mode}</span>
+        {showGate ? <Gate report={cube.reportContextLost} /> : null}
+      </div>
+    );
+  }
+
+  const view = render(<Harness showGate />);
+  expect(screen.getByText("html on")).toBeInTheDocument();
+  expect(screen.getByText("cube")).toBeInTheDocument();
+
+  act(() => {
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+  });
+  expect(screen.getByText("html off")).toBeInTheDocument();
+  expect(screen.getByText("cube")).toBeInTheDocument();
+
+  const frame = nextId;
+  act(() => {
+    queued[frame]();
+  });
+  expect(screen.getByText("flat")).toBeInTheDocument();
+  view.unmount();
+
+  const second = render(<Harness showGate />);
+  act(() => {
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+  });
+  expect(screen.getByText("html off")).toBeInTheDocument();
+  expect(screen.getByText("cube")).toBeInTheDocument();
+  const pending = nextId;
+  const callback = queued[pending];
+  second.rerender(<Harness showGate={false} />);
+  act(() => {
+    callback();
+  });
+  expect(screen.getByText("cube")).toBeInTheDocument();
+  expect(screen.queryByText("flat")).not.toBeInTheDocument();
+  expect(screen.queryByText("html off")).not.toBeInTheDocument();
+});
+
 test("a matchMedia change can force flat", () => {
   let reduced = false;
   const listeners = new Set();
@@ -161,4 +255,27 @@ test("a matchMedia change can force flat", () => {
     for (const fn of listeners) fn();
   });
   expect(result.current.mode).toBe("flat");
+});
+
+test("the canvas stays up until the frame after the cube is dismissed", () => {
+  const queued = [];
+  let nextId = 0;
+  vi.stubGlobal("requestAnimationFrame", (callback) => {
+    nextId += 1;
+    queued[nextId] = callback;
+    return nextId;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (frameId) => {
+    queued[frameId] = null;
+  });
+  const hook = renderHook(({ want }) => useDeferredCanvas(want), {
+    initialProps: { want: true },
+  });
+  expect(hook.result.current).toBe(true);
+  hook.rerender({ want: false });
+  expect(hook.result.current).toBe(true);
+  act(() => {
+    queued[nextId]();
+  });
+  expect(hook.result.current).toBe(false);
 });

@@ -35,6 +35,8 @@ export default function InboxThreads({ threads, reply, setReply, sendReply, erro
             <input
               className="flex-1 rounded-md border border-stone-300 px-3 py-2 text-sm"
               placeholder={`Reply to ${thread.otherName}`}
+              aria-label={`Reply to ${thread.otherName}`}
+              maxLength={500}
               value={reply[thread.otherId] || ""}
               onChange={(event) => setReply((current) => ({
                 ...current,

@@ -1,5 +1,5 @@
 // Decides cube vs flat in one place: WebGL, load errors, saved choice, motion, and screen size.
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 export const STAGE_BACKGROUND = "linear-gradient(180deg, #d7eefb 0%, #e6e2fb 55%, #fbf9ff 100%)";
 
@@ -16,6 +16,66 @@ export const NARROW_QUERY = "(max-width: 640px)";
 export const COARSE_QUERY = "(pointer: coarse)";
 
 const PREFIX = "3D view is off because ";
+export const CONTEXT_LOST_REASON = "3D view stopped because the browser lost the graphics context. Reload the page to try 3D again.";
+
+export function bindContextLoss(canvas, onLost) {
+  function onContextLost(event) {
+    // three.js asks us to cancel the event so the canvas does not go blank.
+    event.preventDefault();
+    onLost(CONTEXT_LOST_REASON);
+  }
+  canvas.addEventListener("webglcontextlost", onContextLost);
+  return () => canvas.removeEventListener("webglcontextlost", onContextLost);
+}
+
+// The face panels use their own React root. Drop them one frame before the
+// canvas goes away, or React warns that a root unmounted during render.
+export function useHtmlReady(canvas, reportContextLost) {
+  const [htmlReady, setHtmlReady] = useState(true);
+  const reportRef = useRef(reportContextLost);
+
+  useEffect(() => {
+    reportRef.current = reportContextLost;
+  });
+
+  useEffect(() => {
+    if (!canvas) return undefined;
+    let frame = 0;
+    let alive = true;
+    const stop = bindContextLoss(canvas, () => {
+      setHtmlReady(false);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!alive) return;
+        reportRef.current?.();
+      });
+    });
+    return () => {
+      alive = false;
+      stop();
+      cancelAnimationFrame(frame);
+    };
+  }, [canvas]);
+
+  return htmlReady;
+}
+
+// The canvas stays up for one frame after the cube is dismissed so face panels
+// can leave first. Unmounting both in the same commit drops their roots mid-render.
+export function useDeferredCanvas(wantCube) {
+  const [canvasMounted, setCanvasMounted] = useState(wantCube);
+  if (wantCube && !canvasMounted) {
+    setCanvasMounted(true);
+  }
+
+  useEffect(() => {
+    if (wantCube) return undefined;
+    const frame = requestAnimationFrame(() => setCanvasMounted(false));
+    return () => cancelAnimationFrame(frame);
+  }, [wantCube]);
+
+  return canvasMounted;
+}
 
 function webglAvailable() {
   // A few browsers throw from getContext instead of returning null.
@@ -42,12 +102,20 @@ function readEnvironment() {
   };
 }
 
+// Private browsing can throw when storage is blocked. Treat that as no saved choice.
 function readKey(key) {
-  // Private browsing can throw when storage is blocked. Treat that as no saved choice.
   try {
     return localStorage.getItem(key);
   } catch {
     return null;
+  }
+}
+
+function writeKey(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice still applies for this visit.
   }
 }
 
@@ -64,14 +132,15 @@ function constrained(input) {
 }
 
 function resolveCubeMode(input) {
-  // No WebGL and a failed load stay flat. A saved "flat" choice wins over opt-in.
-  if (!input.webgl || input.loadFailed) return "flat";
+  // No WebGL, a lost context, and a failed load stay flat. A saved "flat" choice wins over opt-in.
+  if (input.contextLost || !input.webgl || input.loadFailed) return "flat";
   if (input.storedView === "flat") return "flat";
   if (constrained(input) && !input.optIn) return "flat";
   return "cube";
 }
 
 export function flatReasonText(input) {
+  if (input.contextLost) return CONTEXT_LOST_REASON;
   if (input.loadFailed) {
     return `${PREFIX}the cube failed to load: ${input.loadError || "unknown error"}`;
   }
@@ -83,7 +152,7 @@ export function flatReasonText(input) {
 }
 
 function canOfferOptIn(input) {
-  if (!input.webgl || input.loadFailed || input.storedView === "flat") return false;
+  if (input.contextLost || !input.webgl || input.loadFailed || input.storedView === "flat") return false;
   return constrained(input);
 }
 
@@ -91,6 +160,7 @@ export function useCubeMode(loadFailed = false, loadError = "") {
   const [env, setEnv] = useState(readEnvironment);
   const [storedView, setStoredView] = useState(readStoredView);
   const [optIn, setOptIn] = useState(readOptIn);
+  const [contextLost, setContextLost] = useState(false);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return undefined;
@@ -102,32 +172,36 @@ export function useCubeMode(loadFailed = false, loadError = "") {
     };
   }, []);
 
-  const input = { ...env, loadFailed, loadError, storedView, optIn };
+  const input = { ...env, loadFailed, loadError, storedView, optIn, contextLost };
   const mode = resolveCubeMode(input);
   const reason = mode === "flat" ? flatReasonText(input) : "";
   const offerOptIn = mode === "flat" && canOfferOptIn(input);
-  const canChooseCube = mode === "flat" && env.webgl && !loadFailed && storedView === "flat";
+  const canChooseCube = mode === "flat" && env.webgl && !loadFailed && !contextLost && storedView === "flat";
   const shortMotion = mode === "cube" && env.reducedMotion;
 
   function chooseFlat() {
-    localStorage.setItem(STORAGE_KEY, "flat");
+    writeKey(STORAGE_KEY, "flat");
     setStoredView("flat");
   }
 
   function chooseCube() {
-    localStorage.setItem(STORAGE_KEY, "cube");
+    writeKey(STORAGE_KEY, "cube");
     setStoredView("cube");
     if (constrained(env)) {
-      localStorage.setItem(OPT_IN_KEY, "1");
+      writeKey(OPT_IN_KEY, "1");
       setOptIn(true);
     }
   }
 
   function optIntoCube() {
-    localStorage.setItem(OPT_IN_KEY, "1");
-    localStorage.setItem(STORAGE_KEY, "cube");
+    writeKey(OPT_IN_KEY, "1");
+    writeKey(STORAGE_KEY, "cube");
     setOptIn(true);
     setStoredView("cube");
+  }
+
+  function reportContextLost() {
+    setContextLost(true);
   }
 
   return {
@@ -139,5 +213,6 @@ export function useCubeMode(loadFailed = false, loadError = "") {
     chooseFlat,
     chooseCube,
     optIntoCube,
+    reportContextLost,
   };
 }

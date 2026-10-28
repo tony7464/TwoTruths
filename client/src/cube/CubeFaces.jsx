@@ -1,9 +1,11 @@
 // The words drawn on each face of the cube.
 import { useAuth } from "../AuthContext";
 import { LoginForm, SignupForm } from "../components/AuthForms";
+import FirstMessageForm from "../components/FirstMessageForm";
 import InboxThreads from "../components/InboxThreads";
 import ProfileEditor from "../components/ProfileEditor";
 import { useInbox } from "../components/useInbox";
+import { useGame } from "./gameContext";
 
 const shell = "h-full overflow-auto rounded-xl p-3 text-[15px] leading-snug text-stone-800";
 const shellStyle = {
@@ -14,23 +16,36 @@ const shellStyle = {
 
 const linkClass = "mt-2 text-[15px] text-emerald-800 underline";
 
-export function StatementsFace({
-  profile,
-  selectedId,
-  onSelect,
-  onGuess,
-  onShowPlayers,
-  loading,
-}) {
+export function Panel({ as: Tag = "div", className = "", style, children, ...rest }) {
+  return (
+    <Tag
+      className={className ? `${shell} ${className}` : shell}
+      style={style ? { ...shellStyle, ...style } : shellStyle}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+export function StatementsFace() {
   const { user } = useAuth();
+  const { game, onGuess, onShowPlayers } = useGame();
+  const profile = game.current;
+  const selectedId = profile ? game.selected[profile.id] : undefined;
+  const loading = game.loading;
+
+  function choose(statementId) {
+    game.setSelected((items) => ({ ...items, [profile.id]: statementId }));
+  }
 
   if (loading) {
-    return <p className={shell} style={shellStyle}>Loading profiles...</p>;
+    return <Panel as="p">Loading profiles...</Panel>;
   }
 
   if (!profile) {
     return (
-      <div className={`${shell} space-y-2`} style={shellStyle}>
+      <Panel className="space-y-2">
         <p>Pick someone from the Players face</p>
         <button
           type="button"
@@ -39,14 +54,14 @@ export function StatementsFace({
         >
           Show players
         </button>
-      </div>
+      </Panel>
     );
   }
 
   const guess = profile.my_guess;
 
   return (
-    <div className={`${shell} space-y-1.5`} style={shellStyle}>
+    <Panel className="space-y-1.5">
       <p className="text-[15px] text-stone-500">{profile.username}</p>
       <ul className="space-y-1">
         {profile.statements.map((statement) => {
@@ -59,7 +74,7 @@ export function StatementsFace({
                 type="button"
                 disabled={Boolean(guess)}
                 aria-pressed={chosen}
-                onClick={() => onSelect(statement.id)}
+                onClick={() => choose(statement.id)}
                 className={`w-full rounded-md border px-2 py-1 text-left text-[15px] leading-tight ${
                   chosen && !guess ? "border-emerald-700 bg-emerald-50" : "border-[#d5e8f6] bg-white"
                 } ${guess ? "cursor-default" : "hover:border-stone-400"}`}
@@ -87,7 +102,7 @@ export function StatementsFace({
         </p>
       )}
       {guess && <p className="text-[13px] text-stone-500">score {user?.score}</p>}
-    </div>
+    </Panel>
   );
 }
 
@@ -96,11 +111,12 @@ export function ProfileFace() {
   if (!user) return null;
 
   return (
-    <div className={shell} style={shellStyle}>
-      {user.bio ? <p className="text-[15px] text-stone-600">{user.bio}</p> : null}
-      <p className="mb-2 text-[13px] text-stone-500">score {user.score}</p>
-      <ProfileEditor compact />
-    </div>
+    <Panel className="flex flex-col" style={{ padding: 10, overflow: "hidden" }}>
+      <p className="mb-1 shrink-0 text-[13px] text-stone-500">score {user.score}</p>
+      <div className="min-h-0 flex-1">
+        <ProfileEditor compact />
+      </div>
+    </Panel>
   );
 }
 
@@ -116,9 +132,13 @@ function badgeClass(badge) {
   return "bg-stone-100 text-stone-600";
 }
 
-export function PlayersFace({ profiles, currentId, onPick }) {
+export function PlayersFace() {
+  const { game, onPick } = useGame();
+  const profiles = game.profiles;
+  const currentId = game.current?.id;
+
   return (
-    <div className={`${shell} space-y-1`} style={shellStyle} aria-label="Players">
+    <Panel className="space-y-1" aria-label="Players">
       {profiles.length === 0 && (
         <p className="text-[15px] text-stone-600">No finished profiles yet.</p>
       )}
@@ -143,55 +163,40 @@ export function PlayersFace({ profiles, currentId, onPick }) {
           </button>
         );
       })}
-    </div>
+    </Panel>
   );
 }
 
-export function InboxFace({
-  profile,
-  message,
-  onMessageChange,
-  onSend,
-  sending,
-  sent,
-  opacity,
-}) {
-  const inbox = useInbox();
+export function InboxFace() {
+  const { game, anim } = useGame();
+  const profile = game.current;
+  const active = anim.activeFace === "right" && !anim.locked;
+  const inbox = useInbox({ active });
   const unlocked = Boolean(profile?.my_guess?.messaging_unlocked);
+  const sending = Boolean(profile && game.sending[profile.id]);
+  const sent = Boolean(profile && game.sent[profile.id]);
+  const message = profile ? game.messageDraft(profile) : "";
+
+  async function handleSend() {
+    if (!profile) return;
+    const created = await game.sendMessage(profile);
+    if (created) inbox.reload();
+  }
 
   return (
-    <div className={shell} style={{ ...shellStyle, opacity }}>
+    <Panel style={{ opacity: anim.inboxOpacity }}>
       {unlocked ? (
-        <form
-          className="mb-2 space-y-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSend();
+        <FirstMessageForm
+          compact
+          username={profile.username}
+          message={message}
+          sending={sending}
+          sent={sent}
+          onMessageChange={(value) => {
+            game.setDrafts((items) => ({ ...items, [profile.id]: value }));
           }}
-        >
-          <p className="text-[15px] font-medium text-emerald-800">Correct. Send the first message.</p>
-          {sent ? (
-            <p className="text-[15px] text-stone-600">Sent. It is in your inbox.</p>
-          ) : (
-            <>
-              <textarea
-                className="w-full rounded-md border border-[#d3e9f8] bg-white px-2 py-1 text-[15px] disabled:opacity-60"
-                rows="2"
-                value={message}
-                disabled={sending}
-                aria-label={`Message to ${profile.username}`}
-                onChange={(event) => onMessageChange(event.target.value)}
-              />
-              <button
-                type="submit"
-                disabled={sending}
-                className="rounded-md bg-stone-900 px-2 py-1 text-[15px] text-white disabled:opacity-60"
-              >
-                Send
-              </button>
-            </>
-          )}
-        </form>
+          onSend={handleSend}
+        />
       ) : (
         <p className="mb-2 text-[15px] text-stone-700">Guess someone correctly to unlock messaging</p>
       )}
@@ -207,40 +212,44 @@ export function InboxFace({
           error={inbox.error}
         />
       )}
-    </div>
+    </Panel>
   );
 }
 
-export function LoginFace({ onSuccess, onFailure, onShowSignup }) {
+export function LoginFace() {
+  const { onLoginSuccess, onLoginFailure, onShowSignup } = useGame();
+
   return (
-    <div className={shell} style={shellStyle}>
+    <Panel>
       <h2 className="mb-2 text-base font-semibold">Log in</h2>
-      <LoginForm compact onSuccess={onSuccess} onFailure={onFailure} />
+      <LoginForm compact onSuccess={onLoginSuccess} onFailure={onLoginFailure} />
       <button type="button" onClick={onShowSignup} className={linkClass}>
         Need an account? Sign up
       </button>
       <p className="mt-2 text-[13px] text-stone-500">
         Demo users: alex, jordan, sam, riley. Password: password123
       </p>
-    </div>
+    </Panel>
   );
 }
 
-export function SignupFace({ onSuccess, onFailure, onShowLogin }) {
+export function SignupFace() {
+  const { onSignupSuccess, onSignupFailure, onShowLogin } = useGame();
+
   return (
-    <div className={shell} style={shellStyle}>
+    <Panel>
       <h2 className="mb-1 text-base font-semibold">Sign up</h2>
       <p className="mb-2 text-[13px] text-stone-600">You will add two truths and one lie next.</p>
-      <SignupForm compact onSuccess={onSuccess} onFailure={onFailure} />
+      <SignupForm compact onSuccess={onSignupSuccess} onFailure={onSignupFailure} />
       <button type="button" onClick={onShowLogin} className={linkClass}>
         Already have an account? Log in
       </button>
-    </div>
+    </Panel>
   );
 }
 
 export function GuestNote({ children }) {
   return (
-    <p className={shell} style={shellStyle}>{children}</p>
+    <Panel as="p">{children}</Panel>
   );
 }

@@ -93,80 +93,89 @@ export function useCubeAnimations(initialFace = "front", quick = false) {
     group.rotation.y = faceYaw(face);
   }, [showFace]);
 
-  const playWrong = useCallback(() => {
+  // Reduced motion plays quick. full and quick get the group, or null if it is not mounted.
+  const playVariant = useCallback((face, full, quick) => {
     if (playingRef.current) return;
-    showFace("left");
+    if (face) showFace(face);
     const group = groupRef.current;
-    if (!group) return;
-    settlePose(group);
-    if (quickRef.current) {
-      play(createQuickTurnTimeline(group, "left", eyesRef.current));
+    if (!group) {
+      quick(null);
       return;
     }
-    play(createWrongTimeline(group, eyesRef.current, () => {
-      if (mounted.current) showFace("left");
-    }));
+    settlePose(group);
+    if (quickRef.current) {
+      const timeline = quick(group);
+      if (timeline) play(timeline);
+      return;
+    }
+    const timeline = full(group);
+    if (timeline) {
+      play(timeline);
+      return;
+    }
+    const fallback = quick(group);
+    if (fallback) play(fallback);
   }, [play, showFace]);
+
+  const playWrong = useCallback(() => {
+    playVariant(
+      "left",
+      (group) => createWrongTimeline(group, eyesRef.current, () => {
+        if (mounted.current) showFace("left");
+      }),
+      (group) => (group ? createQuickTurnTimeline(group, "left", eyesRef.current) : null),
+    );
+  }, [playVariant, showFace]);
 
   const playCorrect = useCallback(() => {
-    if (playingRef.current) return;
-    showFace("right");
-    const group = groupRef.current;
-    const camera = cameraRef.current;
-    if (!group || !camera || quickRef.current) {
-      setInboxOpacity(1);
-      if (group) {
-        settlePose(group);
-        play(createQuickTurnTimeline(group, "right", eyesRef.current, "Happy"));
-      }
-      return;
-    }
-    settlePose(group);
-    opacity.current.value = 0;
-    setInboxOpacity(0);
-    play(createCorrectTimeline({
-      group,
-      eyes: eyesRef.current,
-      camera,
-      opacity: opacity.current,
-      onSpinStart: () => {
-        if (mounted.current) showFace("right");
+    playVariant(
+      "right",
+      (group) => {
+        const camera = cameraRef.current;
+        if (!camera) return null;
+        opacity.current.value = 0;
+        setInboxOpacity(0);
+        return createCorrectTimeline({
+          group,
+          eyes: eyesRef.current,
+          camera,
+          opacity: opacity.current,
+          onSpinStart: () => {
+            if (mounted.current) showFace("right");
+          },
+          onSpinEnd: () => {
+            if (mounted.current) setLocked(false);
+          },
+          onOpacity: (value) => {
+            if (mounted.current) setInboxOpacity(value);
+          },
+        });
       },
-      onSpinEnd: () => {
-        if (mounted.current) setLocked(false);
+      (group) => {
+        setInboxOpacity(1);
+        if (!group) return null;
+        return createQuickTurnTimeline(group, "right", eyesRef.current, "Happy");
       },
-      onOpacity: (value) => {
-        if (mounted.current) setInboxOpacity(value);
-      },
-    }));
-  }, [play, showFace]);
+    );
+  }, [playVariant, showFace]);
 
   const playAuthFail = useCallback(() => {
-    if (playingRef.current) return;
-    const group = groupRef.current;
-    if (!group) return;
-    settlePose(group);
-    if (quickRef.current) {
-      play(createQuickMoodTimeline(eyesRef.current, "Sad_Disapproval"));
-      return;
-    }
-    play(createAuthFailTimeline(group, eyesRef.current));
-  }, [play]);
+    playVariant(
+      null,
+      (group) => createAuthFailTimeline(group, eyesRef.current),
+      (group) => (group ? createQuickMoodTimeline(eyesRef.current, "Sad_Disapproval") : null),
+    );
+  }, [playVariant]);
 
   const playAuthSuccess = useCallback(() => {
-    if (playingRef.current) return;
-    showFace("front");
-    const group = groupRef.current;
-    if (!group) return;
-    settlePose(group);
-    if (quickRef.current) {
-      play(createQuickTurnTimeline(group, "front", eyesRef.current, "Happy"));
-      return;
-    }
-    play(createAuthSuccessTimeline(group, eyesRef.current, () => {
-      if (mounted.current) showFace("front");
-    }));
-  }, [play, showFace]);
+    playVariant(
+      "front",
+      (group) => createAuthSuccessTimeline(group, eyesRef.current, () => {
+        if (mounted.current) showFace("front");
+      }),
+      (group) => (group ? createQuickTurnTimeline(group, "front", eyesRef.current, "Happy") : null),
+    );
+  }, [playVariant, showFace]);
 
   const skip = useCallback(() => {
     activeTl.current?.progress(1);

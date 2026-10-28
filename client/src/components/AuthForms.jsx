@@ -46,6 +46,11 @@ export function LoginForm({ compact = false, onSuccess, onFailure }) {
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
+          required
+          minLength={3}
+          maxLength={20}
+          pattern="[A-Za-z0-9_]{3,20}"
+          title="3 to 20 letters, numbers, or underscores"
         />
       </label>
       <label className={labelClass(compact)}>
@@ -56,6 +61,10 @@ export function LoginForm({ compact = false, onSuccess, onFailure }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
+          required
+          minLength={6}
+          maxLength={72}
+          title="6 to 72 characters"
         />
       </label>
       <button
@@ -92,6 +101,11 @@ export function SignupForm({ compact = false, onSuccess, onFailure }) {
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
+          required
+          minLength={3}
+          maxLength={20}
+          pattern="[A-Za-z0-9_]{3,20}"
+          title="3 to 20 letters, numbers, or underscores"
         />
       </label>
       <label className={labelClass(compact)}>
@@ -102,6 +116,10 @@ export function SignupForm({ compact = false, onSuccess, onFailure }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="new-password"
+          required
+          minLength={6}
+          maxLength={72}
+          title="6 to 72 characters"
         />
       </label>
       <label className={labelClass(compact)}>
@@ -109,6 +127,7 @@ export function SignupForm({ compact = false, onSuccess, onFailure }) {
         <textarea
           className={fieldClass(compact)}
           rows={compact ? 2 : 3}
+          maxLength={160}
           value={bio}
           onChange={(event) => setBio(event.target.value)}
         />

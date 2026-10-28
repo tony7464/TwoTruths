@@ -7,7 +7,9 @@ import { useSpotTheLie } from "../components/useSpotTheLie";
 import { useCubeAnimations } from "./animations";
 import CubeScene from "./CubeScene";
 import { faceToRoute, routeToFace } from "./cubeRoutes";
+import { GameProvider } from "./gameContext";
 import { STAGE_BACKGROUND, useCubeFallback } from "./useCubeMode";
+import { useCubeFrame } from "./useCubeFrame";
 
 const LOGGED_IN_FACES = [
   { id: "front", label: "Statements" },
@@ -21,8 +23,10 @@ const LOGGED_OUT_FACES = [
   { id: "right", label: "Sign up" },
 ];
 
+const focusClass = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#047857]";
+
 function buttonClass(active) {
-  return `rounded-md border px-3 py-2 text-sm disabled:opacity-50 ${
+  return `rounded-md border px-3 py-2 text-sm disabled:opacity-50 ${focusClass} ${
     active
       ? "border-[#7eb7de] bg-white font-medium text-stone-900"
       : "border-white/80 bg-white/70 text-stone-700 hover:bg-white"
@@ -52,6 +56,11 @@ export default function CubeModeApp() {
   const pendingFace = useRef(null);
   const locationRef = useRef(location);
   const userRef = useRef(user);
+  const stageRef = useRef(null);
+  const frame = useCubeFrame(stageRef);
+  const frameStyle = frame.size >= 2
+    ? { width: frame.size, height: frame.size, marginLeft: frame.offset }
+    : { width: "min(78vh, 720px)", height: "min(78vh, 720px)", maxWidth: "100%", marginInline: "auto" };
 
   useEffect(() => {
     locationRef.current = location;
@@ -149,24 +158,27 @@ export default function CubeModeApp() {
       </header>
 
       <div className="flex flex-col items-center px-3 pb-8">
-        <div
-          className="relative"
-          style={{ width: "min(78vh, 720px)", height: "min(78vh, 720px)", maxWidth: "100%" }}
-        >
-          <CubeScene
-            anim={anim}
-            loggedIn={loggedIn}
-            game={game}
-            onGuess={handleGuess}
-            onPick={handlePick}
-            onShowPlayers={() => selectFace("left")}
-            onLoginSuccess={onLoginSuccess}
-            onLoginFailure={() => playAuthFail()}
-            onSignupSuccess={onSignupSuccess}
-            onSignupFailure={() => playAuthFail()}
-            onShowLogin={() => selectFace("front")}
-            onShowSignup={() => selectFace("right")}
-          />
+        <div ref={stageRef} className="w-full">
+          <div className="relative" style={frameStyle}>
+            <GameProvider
+              value={{
+                anim,
+                loggedIn,
+                game,
+                onGuess: handleGuess,
+                onPick: handlePick,
+                onShowPlayers: () => selectFace("left"),
+                onLoginSuccess,
+                onLoginFailure: () => playAuthFail(),
+                onSignupSuccess,
+                onSignupFailure: () => playAuthFail(),
+                onShowLogin: () => selectFace("front"),
+                onShowSignup: () => selectFace("right"),
+              }}
+            >
+              <CubeScene />
+            </GameProvider>
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Cube faces">
@@ -174,6 +186,7 @@ export default function CubeModeApp() {
             <button
               key={face.id}
               type="button"
+              aria-label={`${face.label} face`}
               aria-pressed={activeFace === face.id}
               disabled={playing}
               onClick={() => selectFace(face.id)}

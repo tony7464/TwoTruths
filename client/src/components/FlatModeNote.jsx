@@ -1,7 +1,7 @@
 // Names why the cube is off, and offers the buttons that turn it back on.
-import { useCubeFallback } from "../cube/useCubeMode";
+import { CONTEXT_LOST_REASON, useCubeFallback } from "../cube/useCubeMode";
 
-const buttonClass = "rounded-md border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-50";
+const buttonClass = "rounded-md border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#047857]";
 
 export default function FlatModeNote() {
   const fallback = useCubeFallback();
@@ -18,6 +18,11 @@ export default function FlatModeNote() {
       {fallback.canChooseCube ? (
         <button type="button" onClick={fallback.chooseCube} className={buttonClass}>
           Use 3D cube
+        </button>
+      ) : null}
+      {fallback.reason === CONTEXT_LOST_REASON ? (
+        <button type="button" onClick={() => window.location.reload()} className={buttonClass}>
+          Reload page
         </button>
       ) : null}
     </div>

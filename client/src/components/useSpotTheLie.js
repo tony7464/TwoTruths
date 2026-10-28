@@ -101,7 +101,7 @@ export function useSpotTheLie(active) {
   }
 
   async function sendMessage(profile) {
-    if (messageLock.current.has(profile.id)) return;
+    if (messageLock.current.has(profile.id)) return null;
     messageLock.current.add(profile.id);
     setSending((items) => ({ ...items, [profile.id]: true }));
 
@@ -113,12 +113,13 @@ export function useSpotTheLie(active) {
     if (!created) {
       messageLock.current.delete(profile.id);
       setSending((items) => ({ ...items, [profile.id]: false }));
-      return;
+      return null;
     }
 
     setDrafts((items) => ({ ...items, [profile.id]: "" }));
     setSent((items) => ({ ...items, [profile.id]: true }));
     setSending((items) => ({ ...items, [profile.id]: false }));
+    return created;
   }
 
   return {
