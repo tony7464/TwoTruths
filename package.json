@@ -4,6 +4,7 @@
   "scripts": {
     "setup": "node scripts/setup.js",
     "start": "node scripts/start.js",
-    "test": "node scripts/test.js"
+    "test": "node scripts/test.js",
+    "e2e": "node e2e/regress.js"
   }
 }
