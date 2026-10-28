@@ -1,0 +1,1029 @@
+{
+  "info": {
+    "name": "TwoTruths",
+    "description": "Every API route. baseUrl defaults to the Flask server. Postman and newman store the session cookie. Usernames are new each run, so demo accounts are not used. One failed login and one failed account deletion stay under the limit of 5 failures per username and IP per 60 seconds. Signup allows 10 attempts per IP per minute; this collection sends 4.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:5555"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('ok', function () { pm.expect(pm.response.json().ok).to.eql(true); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/health"
+      }
+    },
+    {
+      "name": "Signup",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var stamp = Date.now();",
+              "pm.collectionVariables.set('userA', 'a' + stamp);",
+              "pm.collectionVariables.set('userAOtherCase', 'A' + stamp);",
+              "pm.collectionVariables.set('userB', 'b' + stamp);",
+              "pm.collectionVariables.set('userC', 'c' + stamp);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set('userAId', pm.response.json().id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userA}}\",\n  \"password\": \"password123\",\n  \"bio\": \"Hello\"\n}"
+        },
+        "url": "{{baseUrl}}/api/signup"
+      }
+    },
+    {
+      "name": "Signup same name different case",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409', function () { pm.response.to.have.status(409); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/signup",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userAOtherCase}}\",\n  \"password\": \"password123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Check session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('name', function () {",
+              "  pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('userA'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/check_session"
+      }
+    },
+    {
+      "name": "Login with bad JSON",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400', function () { pm.response.to.have.status(400); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "[]"
+        },
+        "url": "{{baseUrl}}/api/login"
+      }
+    },
+    {
+      "name": "Create statements with bad input",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400', function () { pm.response.to.have.status(400); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"statements\": []}"
+        },
+        "url": "{{baseUrl}}/api/statements"
+      }
+    },
+    {
+      "name": "Create statements",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });",
+              "var rows = pm.response.json();",
+              "pm.collectionVariables.set('statementId', rows[0].id);",
+              "pm.collectionVariables.set('truthId', rows.find(function (row) { return row.is_lie === false; }).id);",
+              "pm.collectionVariables.set('lieId', rows.find(function (row) { return row.is_lie === true; }).id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"statements\": [\n    {\"content\": \"I like rain.\", \"is_lie\": false},\n    {\"content\": \"I own a boat.\", \"is_lie\": true},\n    {\"content\": \"I drink tea.\", \"is_lie\": false}\n  ]\n}"
+        },
+        "url": "{{baseUrl}}/api/statements"
+      }
+    },
+    {
+      "name": "List my statements",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('three', function () { pm.expect(pm.response.json()).to.have.lengthOf(3); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/statements"
+      }
+    },
+    {
+      "name": "Update a statement",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"content\": \"I like snow.\"}"
+        },
+        "url": "{{baseUrl}}/api/statements/{{statementId}}"
+      }
+    },
+    {
+      "name": "Set bio",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('bio', function () { pm.expect(pm.response.json().bio).to.eql('Night hiker'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/profile",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bio\": \"Night hiker\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Clear bio",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('cleared', function () { pm.expect(pm.response.json().bio).to.eql(''); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/profile",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bio\": \"\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Bio too long",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400', function () { pm.response.to.have.status(400); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/profile",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"bio\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+        }
+      }
+    },
+    {
+      "name": "Bio unchanged after a too-long save",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('still empty', function () { pm.expect(pm.response.json().bio).to.eql(''); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/check_session"
+      }
+    },
+    {
+      "name": "Delete one statement",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('405', function () { pm.response.to.have.status(405); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/statements/{{statementId}}"
+      }
+    },
+    {
+      "name": "List users",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/users"
+      }
+    },
+    {
+      "name": "Logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/logout"
+      }
+    },
+    {
+      "name": "Check session logged out",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('empty', function () { pm.expect(pm.response.json().user).to.eql(null); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/check_session"
+      }
+    },
+    {
+      "name": "List users logged out",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', function () { pm.response.to.have.status(401); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/users"
+      }
+    },
+    {
+      "name": "Login with the wrong password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userA}}\",\n  \"password\": \"wrong-password\"\n}"
+        },
+        "url": "{{baseUrl}}/api/login"
+      }
+    },
+    {
+      "name": "Login with a different case",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('stored case', function () {",
+              "  pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('userA'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userAOtherCase}}\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/login"
+      }
+    },
+    {
+      "name": "Signup the other player",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set('userBId', pm.response.json().id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userB}}\",\n  \"password\": \"password123\",\n  \"bio\": \"Hi\"\n}"
+        },
+        "url": "{{baseUrl}}/api/signup"
+      }
+    },
+    {
+      "name": "Other player creates statements",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });",
+              "var lie = pm.response.json().find(function (row) { return row.is_lie === true; });",
+              "pm.collectionVariables.set('otherLieId', lie.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"statements\": [\n    {\"content\": \"I can swim.\", \"is_lie\": false},\n    {\"content\": \"I have been to the moon.\", \"is_lie\": true},\n    {\"content\": \"I drink tea.\", \"is_lie\": false}\n  ]\n}"
+        },
+        "url": "{{baseUrl}}/api/statements"
+      }
+    },
+    {
+      "name": "Patch someone else's statement",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404', function () { pm.response.to.have.status(404); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"content\": \"Stolen.\"}"
+        },
+        "url": "{{baseUrl}}/api/statements/{{statementId}}"
+      }
+    },
+    {
+      "name": "Logout before switching back",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/logout"
+      }
+    },
+    {
+      "name": "Login as the first player",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userA}}\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/login"
+      }
+    },
+    {
+      "name": "Guess your own profile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403', function () { pm.response.to.have.status(403); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile_user_id\": {{userAId}},\n  \"statement_id\": {{truthId}}\n}"
+        },
+        "url": "{{baseUrl}}/api/guesses"
+      }
+    },
+    {
+      "name": "Guess with a bad id",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400', function () { pm.response.to.have.status(400); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile_user_id\": \"alex\",\n  \"statement_id\": true\n}"
+        },
+        "url": "{{baseUrl}}/api/guesses"
+      }
+    },
+    {
+      "name": "Message before a correct guess",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recipient_id\": {{userBId}},\n  \"body\": \"Too soon.\"\n}"
+        },
+        "url": "{{baseUrl}}/api/messages"
+      }
+    },
+    {
+      "name": "Guess the lie",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });",
+              "pm.test('correct', function () { pm.expect(pm.response.json().is_correct).to.eql(true); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile_user_id\": {{userBId}},\n  \"statement_id\": {{otherLieId}}\n}"
+        },
+        "url": "{{baseUrl}}/api/guesses"
+      }
+    },
+    {
+      "name": "Send a message",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recipient_id\": {{userBId}},\n  \"body\": \"I knew that was the lie!\"\n}"
+        },
+        "url": "{{baseUrl}}/api/messages"
+      }
+    },
+    {
+      "name": "List messages",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('one', function () { pm.expect(pm.response.json()).to.have.lengthOf(1); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/messages"
+      }
+    },
+    {
+      "name": "Guess the same profile again",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409', function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile_user_id\": {{userBId}},\n  \"statement_id\": {{otherLieId}}\n}"
+        },
+        "url": "{{baseUrl}}/api/guesses"
+      }
+    },
+    {
+      "name": "Logout again",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/logout"
+      }
+    },
+    {
+      "name": "Login as the other player",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userB}}\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/login"
+      }
+    },
+    {
+      "name": "Delete statements after a guess",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/statements"
+      }
+    },
+    {
+      "name": "Huge statement id",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404', function () { pm.response.to.have.status(404); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"content\": \"Nope.\"}"
+        },
+        "url": "{{baseUrl}}/api/statements/1000000000000000000000000000000"
+      }
+    },
+    {
+      "name": "Signup a throwaway account",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', function () { pm.response.to.have.status(201); });",
+              "pm.test('name', function () {",
+              "  pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('userC'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/signup",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userC}}\",\n  \"password\": \"password123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Delete account with the wrong password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', function () { pm.response.to.have.status(401); });",
+              "pm.test('error', function () { pm.expect(pm.response.json()).to.have.property('error'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/account",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"wrong-password\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Delete throwaway account",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', function () { pm.response.to.have.status(200); });",
+              "pm.test('deleted', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('Account deleted.');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/account",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"password123\"\n}"
+        }
+      }
+    }
+  ]
+}
