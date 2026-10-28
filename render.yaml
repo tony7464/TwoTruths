@@ -1,0 +1,19 @@
+# Render web service: build the client, then run the API.
+# The default SQLite file is on the instance disk and does not survive a restart.
+# Set DATABASE_URI to a PostgreSQL URL to keep accounts. This file does not create that database.
+services:
+  - type: web
+    name: twotruths
+    runtime: python
+    buildCommand: pip install -r server/requirements.txt && npm --prefix client ci && npm --prefix client run build
+    startCommand: cd server && flask db upgrade && gunicorn app:app --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: TRUST_PROXY
+        value: "1"

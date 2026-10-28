@@ -1,0 +1,11 @@
+# Local environments and build output stay out of the image.
+.git
+.env
+**/.env
+**/node_modules
+client/dist
+server/.venv
+server/instance
+**/__pycache__
+**/*.pyc
+**/.pytest_cache

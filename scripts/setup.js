@@ -1,7 +1,8 @@
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const { serverDir, clientDir, venvPython, npmCommand, run, capture } = require("./common");
+const { root, serverDir, clientDir, venvPython, npmCommand, run, capture } = require("./common");
 
 const PYTHON_URL = "https://www.python.org/downloads/";
 const NODE_URL = "https://nodejs.org/";
@@ -109,14 +110,58 @@ async function ensureVenv(python) {
   await run(python.cmd, [...python.args, "-m", "venv", path.join(serverDir, ".venv")]);
 }
 
+function secretKeyValue(line) {
+  // Case-sensitive name. Optional export, spaces around =, and matching quotes.
+  const match = line.match(/^\s*(?:export\s+)?SECRET_KEY\s*=\s*(.*)$/);
+  if (!match) return null;
+  const raw = match[1].trim();
+  if (raw.length >= 2) {
+    const quote = raw[0];
+    if ((quote === "\"" || quote === "'") && raw.endsWith(quote)) {
+      return raw.slice(1, -1);
+    }
+  }
+  return raw;
+}
+
+function ensureEnv(envPath = path.join(root, ".env")) {
+  const secret = crypto.randomBytes(32).toString("hex");
+  if (!fs.existsSync(envPath)) {
+    fs.writeFileSync(envPath, `SECRET_KEY=${secret}\n`);
+    console.log("Wrote .env with a random SECRET_KEY.");
+    return;
+  }
+  const text = fs.readFileSync(envPath, "utf8");
+  const lines = text.split(/\r?\n/);
+  // python-dotenv keeps the last SECRET_KEY. An earlier value does not count.
+  let lastIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (secretKeyValue(lines[i]) === null) continue;
+    lastIndex = i;
+  }
+  if (lastIndex !== -1) {
+    if (secretKeyValue(lines[lastIndex]) !== "") return;
+    lines[lastIndex] = `SECRET_KEY=${secret}`;
+    const newline = text.includes("\r\n") ? "\r\n" : "\n";
+    fs.writeFileSync(envPath, lines.join(newline));
+    console.log("Added a random SECRET_KEY to .env.");
+    return;
+  }
+  const body = text.length === 0 || text.endsWith("\n") ? text : `${text}\n`;
+  fs.writeFileSync(envPath, `${body}SECRET_KEY=${secret}\n`);
+  console.log("Added a random SECRET_KEY to .env.");
+}
+
 async function main() {
   console.log("Checking Python and Node...");
   checkNode();
   const python = await findPython();
+  // Before flask db upgrade and seed, so those commands can read SECRET_KEY.
+  ensureEnv();
 
   await step("[1/5] Creating the Python environment...", () => ensureVenv(python));
   await step("[2/5] Installing Python packages...", () =>
-    run(venvPython(), ["-m", "pip", "install", "-q", "-r", "requirements.txt"], { cwd: serverDir }),
+    run(venvPython(), ["-m", "pip", "install", "-q", "-r", "requirements-dev.txt"], { cwd: serverDir }),
   );
   await step("[3/5] Installing the website packages...", () =>
     run(npmCommand(), ["install", "--no-fund", "--no-audit"], {
@@ -138,7 +183,11 @@ async function main() {
   console.log("Log in at http://127.0.0.1:5173 with alex / password123");
 }
 
-main().catch((error) => {
-  console.error(error && error.message ? error.message : "Setup failed.");
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error && error.message ? error.message : "Setup failed.");
+    process.exit(1);
+  });
+}
+
+module.exports = { ensureEnv };

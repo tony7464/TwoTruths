@@ -7,4 +7,5 @@ instance/
 node_modules/
 client/node_modules/
 client/dist/
+e2e/output/
 .DS_Store
